@@ -10,9 +10,11 @@ import abc
 import collections
 import collections.abc
 import logging
-import os.path
+import os
+# import os.path
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 import dataset
 import pandas as pd
@@ -25,11 +27,17 @@ CHARS_TO_REMOVE = [' ', '[', ']', '\'', '\"', ",", '{', '}', '(', ')']
 log = logging.getLogger(__name__)
 
 
+def link_factory(name=None, db_path=None, fields=None):
+    """
+    Factory method for producing classes representing linkers.
+    """
+
+
 def test_output():
-    log.info('log from datalink')
+    log.info('logging from datalink')
 
 
-def create_database(
+def create_database_sql(
         filepath="database.db",
         command="sqlite3 {filepath} \"create table aTable"
                 "(field1 int); drop table aTable;\"",
@@ -39,7 +47,7 @@ def create_database(
     """
     try:
         if path_expansions:
-            filepath = os.path.expanduser(os.path.expandvars(filepath))
+            filepath = Path(filepath).expanduser()
         log.debug("Creating database: {filepath}".format(filepath=filepath))
         os.system(command.format(filepath=filepath))
         return filepath
@@ -49,19 +57,69 @@ def create_database(
         return False
 
 
+class SQLInterface:
+    """Class to handle all interactions with SQL databases."""
+
+    def __init__(self, db_path=None, table_name='data'):
+        self._db_path = db_path
+        self._table_name = table_name
+        self.ensure_database()
+
+    @property
+    def db_path(self):
+        """Abstract property for the db location. Implement in derived classes."""
+        return Path(self._db_path)
+
+    @property
+    def db_path_protocol(self):
+        return f'sqlite:///{self.db_path}'
+
+    @property
+    def engine(self):
+        return sqlalchemy.create_engine(self.db_path_protocol)
+
+    @property
+    def does_table_exist(self):
+        with dataset.connect(self.db_path_protocol) as db:
+            if self.table_name in db.tables:
+                return True
+        return False
+
+    @property
+    def table_name(self):
+        return self._table_name
+
+    def ensure_database(self):
+        """Ensure the database for the type of data exists."""
+        if not self.db_path.is_file():
+            s = create_database_sql(self.db_path)
+            if s:
+                log.info('- db created at path: {}'.format(self.db_path))
+            else:
+                log.error('- failed to create db at path: {}'.format(self.db_path))
+
+
+class UUIDLookup:
+    """A lookup interface based on a UUID4."""
+
+
 ############################################################################
 # Abstract classes for SQL databases and saving/loading paradigms
 ############################################################################
 class Base:
     """Properties and methods for SQL db functionality."""
 
-    def __init__(self):
+    def __init__(self, db_path=None):
         self.ensure_database()
+        self._db_path = db_path
 
     @property
     def db_path(self):
         """Abstract property for the db location. Implement in derived classes."""
-        return ts.return_recording_path() / f'{self.__class__.__name__}.db'
+        if self._db_path is None:
+            return Path(f'{self.__class__.__name__}.db')
+        else:
+            return Path(self._db_path)
 
     @property
     def db_path_sql(self):
@@ -86,7 +144,7 @@ class Base:
     def ensure_database(self):
         """Ensure the database for the type of data exists."""
         if not self.db_path.is_file():
-            s = create_database(self.db_path)
+            s = create_database_sql(self.db_path)
             if s:
                 log.info('- db created at path: {}'.format(self.db_path))
             else:
