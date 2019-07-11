@@ -19,11 +19,14 @@ import pandas as pd
 import sqlalchemy
 
 
-
 CHARS_TO_REMOVE = [' ', '[', ']', '\'', '\"', ",", '{', '}', '(', ')']
 
 
 log = logging.getLogger(__name__)
+
+
+def test_output():
+    log.info('log from datalink')
 
 
 def create_database(
@@ -85,9 +88,9 @@ class Base:
         if not self.db_path.is_file():
             s = create_database(self.db_path)
             if s:
-                self.log.info('- db created at path: {}'.format(self.db_path))
+                log.info('- db created at path: {}'.format(self.db_path))
             else:
-                self.log.error('- failed to create db at path: {}'.format(self.db_path))
+                log.error('- failed to create db at path: {}'.format(self.db_path))
 
     @property
     def has_loaded_data(self):
@@ -104,14 +107,14 @@ class Unique(Base):
         super().__init__()
         try:
             self.group_uuid4 = kwargs.pop('group_uuid4')
-            # self.log.debug(f'Call to lookup with {self.group_uuid4}')
+            # log.debug(f'Call to lookup with {self.group_uuid4}')
             result = self.load()
             if not result:
-                self.log.debug('No data found for this configuration.')
+                log.debug('No data found for this configuration.')
                 raise ValueError(f'group_uuid4 {self.group_uuid4} not found, '
                                  f'cannot configure object.')
             elif result is True:
-                self.log.debug('Found and loaded data for this configuration.')
+                log.debug('Found and loaded data for this configuration.')
                 return
         except KeyError:
             pass
@@ -128,7 +131,7 @@ class Unique(Base):
             uuid_obj = uuid.UUID(val)
             setattr(self, "_group_uuid4", uuid_obj)
         except ValueError:
-            self.log.error('Supplied group_uuid4 is not a valid string for a uuid.')
+            log.error('Supplied group_uuid4 is not a valid string for a uuid.')
             raise
 
     @property
@@ -170,7 +173,7 @@ class Metadata(Base):
 
         # Ensure lookup attributes are present and given.
         if not hasattr(self, "_identifiers"):
-            self.log.error('Subclasses must define self._identifiers, the '
+            log.error('Subclasses must define self._identifiers, the '
                            'attributes used in metadata lookups!')
             raise ValueError('Change your subclass definition.')
 
@@ -180,15 +183,15 @@ class Metadata(Base):
                 val = kwargs.pop(attr)
                 self.attrs[attr] = val
             except KeyError:
-                self.log.error(f'Missing argument "{attr}" for '
+                log.error(f'Missing argument "{attr}" for '
                                f'{self.__class__.__name__} construction.')
                 raise
 
         result = self.load()
         if not result:
-            self.log.debug('No data found for this configuration.')
+            log.debug('No data found for this configuration.')
         elif result:
-            self.log.debug('Found and loaded data for this configuration.')
+            log.debug('Found and loaded data for this configuration.')
 
     @property
     def table_name(self):
@@ -265,13 +268,13 @@ class Frame:
             return all(v is None for v in d.values())
         if isinstance(self.data, pd.DataFrame):
             return not self.data.empty
-        self.log.error('Unexpected data type received! Check this class.')
+        log.error('Unexpected data type received! Check this class.')
         return False
 
     def convert_sql_data(self, df):
         """Convert the SQL data into the expected python object types."""
         # Try to eval columns to restore collections.
-        self.log.debug('Converting string vars')
+        log.debug('Converting string vars')
         for column in df.columns:
             try:
                 df[column] = df.apply(lambda row: eval(row[column]), axis=1)
@@ -291,7 +294,7 @@ class Frame:
                     return False
                 self.data = df
                 self._has_loaded_data = True
-                # self.log.debug(f'Loaded data for config.')
+                # log.debug(f'Loaded data for config.')
                 return True
             except Exception:
                 raise
@@ -312,10 +315,10 @@ class Mapping:
         if not hasattr(self, '_data'):
             self._data = None
         if self._data is not None:
-            self.log.warning('Internal data store has already been initialised! '
+            log.warning('Internal data store has already been initialised! '
                              'For safety, the data setter is now disabled, use the generated'
                              ' and implemented property setters instead.')
-            self.log.warning(f'Valid setters: {self._data.keys()}')
+            log.warning(f'Valid setters: {self._data.keys()}')
             return
         try:
             if 'group_uuid4' not in new_input.keys():
@@ -324,7 +327,7 @@ class Mapping:
                 new_input['dt'] = int(datetime.utcnow().timestamp()*1000)
             self._data = new_input
         except (AttributeError, KeyError) as e:
-            self.log.error(f'Failed to add standard keys and set data store: {e}')
+            log.error(f'Failed to add standard keys and set data store: {e}')
 
     @property
     def has_data(self):
@@ -338,7 +341,7 @@ class Mapping:
 ############################################################################
 # Classes that real applications should subclass from.
 ############################################################################
-class UniqueFrame(Unique, Frame, TSLoggable):
+class UniqueFrame(Unique, Frame):
     """
     Class for a frame of unique data.
 
@@ -396,15 +399,15 @@ class UniqueFrame(Unique, Frame, TSLoggable):
             self.delete_group()
 
         if not self.has_data:
-            self.log.warning(f'Call to save data without any data set!')
+            log.warning(f'Call to save data without any data set!')
             return
 
         data_copy = self.data.copy().astype(str)
         data_copy.to_sql(self.table_name, self.engine, if_exists="append", index=False)
-        self.log.debug(f'Persisted data to table {self.table_name}.')
+        log.debug(f'Persisted data to table {self.table_name}.')
 
 
-class MetadataFrame(Frame, Metadata, TSLoggable):
+class MetadataFrame(Frame, Metadata):
     """
     Class for a frame of metadata.
 
@@ -435,20 +438,20 @@ class MetadataFrame(Frame, Metadata, TSLoggable):
         All cells converted to strings.
         """
         if not self.has_data:
-            self.log.debug(f'Empty dataframe is being saved')
+            log.debug(f'Empty dataframe is being saved')
         data_copy = self._data.copy().astype(str)
         data_copy.to_sql(self.table_name, self.engine, if_exists="replace", index=False)
-        self.log.info(f'Persisted data to table {self.table_name}.')
+        log.info(f'Persisted data to table {self.table_name}.')
 
     def load(self):
-        # self.log.debug('Metadata loading')
+        # log.debug('Metadata loading')
         result = Frame.load(self)
         if result:
-            self.log.debug(f'Loaded config for {self.table_name}')
+            log.debug(f'Loaded config for {self.table_name}')
         return result
 
 
-class UniqueMapping(Mapping, Unique, TSLoggable):
+class UniqueMapping(Mapping, Unique):
     """Class for a unique mapping of data."""
     def __init__(self, **kwargs):
         # A container for the last known condition of the data
@@ -475,7 +478,7 @@ class UniqueMapping(Mapping, Unique, TSLoggable):
                         val = kwargs.pop(attr)
                         attrs[attr] = val
                     except KeyError:
-                        self.log.error(f'Missing argument "{attr}" for '
+                        log.error(f'Missing argument "{attr}" for '
                                        f'{self.__class__.__name__} construction.')
                         raise
 
@@ -526,20 +529,20 @@ class UniqueMapping(Mapping, Unique, TSLoggable):
     # Methods for dynamic property setting
     ############################################################################
     def set_attrs_with_setters(self, attrs):
-        self.log.debug('Using property setters to initialise data store values.')
+        log.debug('Using property setters to initialise data store values.')
 
         # Make a list of read-only properties and assign them
         # after any autogenerated properties.
         read_only_attrs = {}
 
         for attr in attrs:
-            # self.log.debug(f'Configuring datastore attribute: {attr}')
+            # log.debug(f'Configuring datastore attribute: {attr}')
             if hasattr(self.__class__, attr):
                 # If the attribute has a setter, use it.
                 prop = getattr(self.__class__, attr)
                 if hasattr(prop, 'fset') and prop.fset is not None:
                     try:
-                        # self.log.debug(f'Setting attr: {attr}, {attrs[attr]}')
+                        # log.debug(f'Setting attr: {attr}, {attrs[attr]}')
                         setattr(self, attr, attrs[attr])
                     except AttributeError:
                         raise
@@ -552,7 +555,7 @@ class UniqueMapping(Mapping, Unique, TSLoggable):
 
         for attr in read_only_attrs:
             try:
-                # self.log.debug(f'Setting property for read only store var {attr}')
+                # log.debug(f'Setting property for read only store var {attr}')
                 self.set_data_val(attr, None)
             except AttributeError:
                 raise
@@ -581,7 +584,7 @@ class UniqueMapping(Mapping, Unique, TSLoggable):
                      (k not in to_ignore and not hasattr(self.__class__, k))]
 
         if new_props:
-            self.log.debug(f'Setting new {self.__class__.__name__} properties: {new_props}')
+            log.debug(f'Setting new {self.__class__.__name__} properties: {new_props}')
         for attr in new_props:
             setattr(self.__class__, attr,
                     property(
@@ -603,9 +606,9 @@ class UniqueMapping(Mapping, Unique, TSLoggable):
         which are read only.
         """
         attr_names = self.get_read_only_datastore_properties()
-        # self.log.warning(f'read only attrs to update: {attr_names}')
+        # log.warning(f'read only attrs to update: {attr_names}')
         for attr in attr_names:
-            # self.log.warning(f'{attr}: {getattr(self, attr)}')
+            # log.warning(f'{attr}: {getattr(self, attr)}')
             self.set_data_val(attr, getattr(self, attr))
 
     @property
@@ -617,7 +620,7 @@ class UniqueMapping(Mapping, Unique, TSLoggable):
             return all(v is None for v in d.values())
         if isinstance(self.data, pd.DataFrame):
             return not self.data.empty
-        self.log.error('Unexpected data type received! Check this class.')
+        log.error('Unexpected data type received! Check this class.')
         return False
 
     @property
@@ -630,7 +633,7 @@ class UniqueMapping(Mapping, Unique, TSLoggable):
                 new_d[key] = val
             else:
                 new_d[key] = repr(val)
-        # self.log.warning('Dict being saved:')
+        # log.warning('Dict being saved:')
         # print(new_d)
         return new_d
 
@@ -640,7 +643,7 @@ class UniqueMapping(Mapping, Unique, TSLoggable):
         All cells converted to strings.
         """
         if not self.has_data:
-            self.log.debug(f'Call to save data without any data set!')
+            log.debug(f'Call to save data without any data set!')
             return
 
         # Update the read only attributes before the save.
@@ -656,15 +659,15 @@ class UniqueMapping(Mapping, Unique, TSLoggable):
             with dataset.connect(self.db_path_sql) as db:
                 t = db[self.table_name]
                 t.insert(self.data_store_as_strs)
-            self.log.debug(f'Persisted data to table {self.table_name}')
+            log.debug(f'Persisted data to table {self.table_name}')
         else:
-            self.log.debug('Data unchanged since last save, not writing')
+            log.debug('Data unchanged since last save, not writing')
 
     # @staticmethod
     def return_evaluated_dict(self, d):
         """Method to return the dict with all string values evaled or converted."""
         new_d = {}
-        self.log.warning(d)
+        log.warning(d)
 
         # Clumsy as hell, but import the names we need here.
 
@@ -680,9 +683,9 @@ class UniqueMapping(Mapping, Unique, TSLoggable):
                 else:
                     new_d[attr] = val
             except (NameError, SyntaxError) as e:
-                self.log.warning(e)
+                log.warning(e)
                 new_d[attr] = str(val)
-        self.log.warning(new_d)
+        log.warning(new_d)
         return new_d
 
     def load(self):
@@ -693,15 +696,15 @@ class UniqueMapping(Mapping, Unique, TSLoggable):
             result = t.find(group_uuid4=str(self.group_uuid4))
 
         result_as_list = list(result)
-        self.log.warning(f'result_as_list: {result_as_list}')
+        log.warning(f'result_as_list: {result_as_list}')
         if not result_as_list:
-            self.log.debug(f'No match found for {self.group_uuid4}')
+            log.debug(f'No match found for {self.group_uuid4}')
             return False
 
         # If we have a result, format it, and convert the strings
         # to the required python objects.
         if len(result_as_list) != 1:
-            self.log.error(f'db {self.table_name} contains multiple matches for group_uuid4'
+            log.error(f'db {self.table_name} contains multiple matches for group_uuid4'
                            f' {self.group_uuid4}, figure out why!')
             raise ValueError('Multiple uuid4s match.')
         result = result_as_list[0]
