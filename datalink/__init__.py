@@ -59,15 +59,22 @@ def create_database_sql(
 class SQLInterface:
     """Class to handle all interactions with SQL databases."""
 
-    def __init__(self, db_path=None, table_name='data'):
+    def __init__(self, db_path=None, table_name='data', uuid=None):
         self._db_path = db_path
         self._table_name = table_name
+        self._uuid = uuid
         self.ensure_database()
+        self._loaded_data = None
+        # Try to load.
+        if uuid and self.is_uuid_saved:
+            print('Loading')
+            self._loaded_data = self.load()
+
 
     @property
     def db_path(self):
         """Abstract property for the db location. Implement in derived classes."""
-        return Path(self._db_path)
+        return Path(self._db_path).expanduser()
 
     @property
     def db_path_protocol(self):
@@ -90,6 +97,8 @@ class SQLInterface:
 
     def ensure_database(self):
         """Ensure the database for the type of data exists."""
+        # print(self.db_path.is_file()) #.expanduser()
+        # print(self.db_path.expanduser().is_file())  # .expanduser()
         if not self.db_path.is_file():
             s = create_database_sql(self.db_path)
             if s:
@@ -107,6 +116,39 @@ class SQLInterface:
         """Abstract property for sql query to be used in loading."""
         return f'SELECT * FROM {self.table_name} WHERE uuid=\'{self.uuid}\''
 
+    @property
+    def is_uuid_saved(self):
+        """
+        Method to check if the uuid
+         is already saved to prevent double saving.
+         """
+        if self.does_table_exist:
+            try:
+                with dataset.connect(self.db_path_protocol) as db:
+                    t = db[self.table_name]
+                    result = t.find(uuid=str(self.uuid))
+                    if result:
+                        return True
+            except Exception:
+                raise
+        return False
+
+    def load(self):
+        """Method to attempt a load from the relevant table."""
+        with dataset.connect(self.db_path_protocol) as db:
+            t = db[self.table_name]
+            result = t.find(uuid=str(self.uuid))
+            return result
+
+    def save(self, data):
+        if not self.is_uuid_saved:
+            with dataset.connect(self.db_path_protocol) as db:
+                t = db[self.table_name]
+                t.insert(data)
+        else:
+            with dataset.connect(self.db_path_protocol) as db:
+                t = db[self.table_name]
+                t.update(data, ['uuid'])
 
 
 class UniqueLookup(SQLInterface):
@@ -114,7 +156,6 @@ class UniqueLookup(SQLInterface):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._uuid = None
 
         # If a uuid4 is given, load it. Maybe better in parent classes?
         # Or have some factory method called here.
@@ -145,7 +186,6 @@ class NamespaceLookup(SQLInterface):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._uuid = None
         try:
             self._config = kwargs.pop("config")
         except KeyError:
@@ -283,7 +323,7 @@ class Unique(Base):
         return f'SELECT * FROM {self.table_name} WHERE group_uuid4=\'{self.group_uuid4}\''
 
     @property
-    def is_group_uuid4_saved(self):
+    def is_uuid_saved(self):
         """Method to check if the group_uuid4 is already saved to prevent double saving."""
         if self.does_table_exist:
             try:
@@ -859,28 +899,28 @@ class UniqueMapping(Mapping, Unique):
         return True
 
 
-############################################################################
-# Test classes
-############################################################################
-class TestUniqueFrame(UniqueFrame):
-    """Test class for persisted unique frame objects."""
-    pass
-
-
-class TestMetadataFrame(MetadataFrame):
-    """Test class for persisted metadata frame objects."""
-    _identifiers = ['name', 'infrastructure']
-
-
-class TestUniqueMapping(UniqueMapping):
-    """Test class for persisted unique mappings."""
-    _required_attrs = ['name', 'age', 'secret_fact']
-    # These are parameters for the internal data store which will
-    # be initialised to None, unless a property setter is defined here.
-    _derived_attrs = ['times_taken_smack_squared']
-    # Optional attributes need a map to a default.
-    _optional_attrs = {'impure': True, 'times_taken_smack': 0}
-
-    @property
-    def times_taken_smack_squared(self):
-        return self.times_taken_smack ** 2
+# ############################################################################
+# # Test classes
+# ############################################################################
+# class TestUniqueFrame(UniqueFrame):
+#     """Test class for persisted unique frame objects."""
+#     pass
+#
+#
+# class TestMetadataFrame(MetadataFrame):
+#     """Test class for persisted metadata frame objects."""
+#     _identifiers = ['name', 'infrastructure']
+#
+#
+# class TestUniqueMapping(UniqueMapping):
+#     """Test class for persisted unique mappings."""
+#     _required_attrs = ['name', 'age', 'secret_fact']
+#     # These are parameters for the internal data store which will
+#     # be initialised to None, unless a property setter is defined here.
+#     _derived_attrs = ['times_taken_smack_squared']
+#     # Optional attributes need a map to a default.
+#     _optional_attrs = {'impure': True, 'times_taken_smack': 0}
+#
+#     @property
+#     def times_taken_smack_squared(self):
+#         return self.times_taken_smack ** 2
