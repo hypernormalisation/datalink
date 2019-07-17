@@ -9,17 +9,17 @@ __email__ = 'sogilvy@protonmail.com'
 import abc
 import collections
 import collections.abc
+import json
 import logging
 import os
-# import os.path
 import uuid
 from datetime import datetime
 from pathlib import Path
+from weakref import WeakKeyDictionary
 
 import dataset
 import pandas as pd
 import sqlalchemy
-
 
 CHARS_TO_REMOVE = [' ', '[', ']', '\'', '\"', ",", '{', '}', '(', ')']
 
@@ -48,12 +48,11 @@ def create_database_sql(
     try:
         if path_expansions:
             filepath = Path(filepath).expanduser()
-        log.debug("Creating database: {filepath}".format(filepath=filepath))
+        log.debug(f'Creating database: {filepath}')
         os.system(command.format(filepath=filepath))
         return filepath
     except Exception:
-        log.warning("error creating database {filepath}".format(filepath=filepath),
-                    exc_info=1)
+        log.warning(f'error creating database {filepath}', exc_info=1)
         return False
 
 
@@ -98,9 +97,91 @@ class SQLInterface:
             else:
                 log.error('- failed to create db at path: {}'.format(self.db_path))
 
+    @property
+    @abc.abstractmethod
+    def uuid(self):
+        pass
 
-class UUIDLookup:
-    """A lookup interface based on a UUID4."""
+    @property
+    def sql_load_query(self):
+        """Abstract property for sql query to be used in loading."""
+        return f'SELECT * FROM {self.table_name} WHERE uuid=\'{self.uuid}\''
+
+
+
+class UniqueLookup(SQLInterface):
+    """A lookup interface based on a uuid4 for a unique entry of data."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._uuid = None
+
+        # If a uuid4 is given, load it. Maybe better in parent classes?
+        # Or have some factory method called here.
+        try:
+            self.uuid = kwargs.pop('uuid')
+            # Do stuff here to populate the data.
+        except KeyError:
+            pass
+
+    @property
+    def uuid(self):
+        if not self._uuid:
+            self._uuid = uuid.uuid4()
+        return str(self._uuid)
+
+    @uuid.setter
+    def uuid(self, val):
+        try:
+            uuid_obj = uuid.UUID(val)
+            setattr(self, "_uuid", uuid_obj)
+        except ValueError:
+            log.error('Supplied uuid is not a valid string for a UUID.')
+            raise
+
+
+class NamespaceLookup(SQLInterface):
+    """A lookup interface based on a config driven uuid5."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._uuid = None
+        try:
+            self._config = kwargs.pop("config")
+        except KeyError:
+            log.error('No config supplied!')
+            raise
+
+    @property
+    def uuid(self):
+        if self._uuid is None:
+            self._uuid = uuid.uuid5(uuid.NAMESPACE_DNS,
+                                    json.dump(self._config, sort_keys=True))
+        return self._uuid
+
+
+class DataStore:
+    """
+    Base class for datastores. Link classes should inherit from these.
+    """
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+class StructDataStore:
+    """
+    Class to manage an internal data store of
+    """
+
+
+class StructLink:
+    """
+    Class to manage a link between a basic mapping of data
+    and an individual entry in an SQL table.
+    """
+
+    def __init__(self, *args, **kwargs):
+        self.link = UniqueLookup()
 
 
 ############################################################################
