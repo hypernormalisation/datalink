@@ -67,7 +67,7 @@ class SQLInterface:
         self._loaded_data = None
         # Try to load.
         if uuid and self.is_uuid_saved:
-            print('Loading')
+            log.debug('Loading')
             self._loaded_data = self.load()
 
 
@@ -127,7 +127,9 @@ class SQLInterface:
                 with dataset.connect(self.db_path_protocol) as db:
                     t = db[self.table_name]
                     result = t.find(uuid=str(self.uuid))
-                    if result:
+                    if list(result):
+                        # print(result)
+                        log.debug('Found uuid')
                         return True
             except Exception:
                 raise
