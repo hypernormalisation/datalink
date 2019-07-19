@@ -24,6 +24,7 @@ def link_factory(db_path=None, table_name=None, data_fields=None):
     NewClass._data_fields = data_fields
     return NewClass
 
+
 def test_output():
     log.info('logging from datalink')
 
