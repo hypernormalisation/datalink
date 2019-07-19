@@ -6,923 +6,605 @@ __licence__ = 'GPLv3'
 __version__ = '0.0.1'
 __email__ = 'sogilvy@protonmail.com'
 
-import abc
-import collections
-import collections.abc
-import json
 import logging
-import os
-import uuid
-from datetime import datetime
-from pathlib import Path
-from weakref import WeakKeyDictionary
-
-import dataset
-import pandas as pd
-import sqlalchemy
-
-CHARS_TO_REMOVE = [' ', '[', ']', '\'', '\"', ",", '{', '}', '(', ')']
-
+import datalink.links as dllinks
+import datalink.stores as dlstores
 
 log = logging.getLogger(__name__)
 
 
-def link_factory(name=None, db_path=None, fields=None):
+def link_factory(db_path=None, table_name=None, data_fields=None):
     """
-    Factory method for producing classes representing linkers.
+    Factory function to produce a new class derived from DataStore.
     """
-
+    class NewClass(dlstores.DataStore):
+        pass
+    NewClass.db_path = db_path
+    NewClass.table_name = table_name
+    NewClass._data_fields = data_fields
+    return NewClass
 
 def test_output():
     log.info('logging from datalink')
 
 
-def create_database_sql(
-        filepath="database.db",
-        command="sqlite3 {filepath} \"create table aTable"
-                "(field1 int); drop table aTable;\"",
-        path_expansions=True):
-    """
-    Create a database at a specified filepath.
-    """
-    try:
-        if path_expansions:
-            filepath = Path(filepath).expanduser()
-        log.debug(f'Creating database: {filepath}')
-        os.system(command.format(filepath=filepath))
-        return filepath
-    except Exception:
-        log.warning(f'error creating database {filepath}', exc_info=1)
-        return False
-
-
-class SQLInterface:
-    """Class to handle all interactions with SQL databases."""
-
-    def __init__(self, db_path=None, table_name='data', uuid=None):
-        self._db_path = db_path
-        self._table_name = table_name
-        self._uuid = uuid
-        self.ensure_database()
-        self._loaded_data = None
-        # Try to load.
-        if uuid and self.is_uuid_saved:
-            log.debug('Loading')
-            self._loaded_data = self.load()
-
-
-    @property
-    def db_path(self):
-        """Abstract property for the db location. Implement in derived classes."""
-        return Path(self._db_path).expanduser()
-
-    @property
-    def db_path_protocol(self):
-        return f'sqlite:///{self.db_path}'
-
-    @property
-    def engine(self):
-        return sqlalchemy.create_engine(self.db_path_protocol)
-
-    @property
-    def does_table_exist(self):
-        with dataset.connect(self.db_path_protocol) as db:
-            if self.table_name in db.tables:
-                return True
-        return False
-
-    @property
-    def table_name(self):
-        return self._table_name
-
-    def ensure_database(self):
-        """Ensure the database for the type of data exists."""
-        # print(self.db_path.is_file()) #.expanduser()
-        # print(self.db_path.expanduser().is_file())  # .expanduser()
-        if not self.db_path.is_file():
-            s = create_database_sql(self.db_path)
-            if s:
-                log.info('- db created at path: {}'.format(self.db_path))
-            else:
-                log.error('- failed to create db at path: {}'.format(self.db_path))
-
-    @property
-    @abc.abstractmethod
-    def uuid(self):
-        pass
-
-    @property
-    def sql_load_query(self):
-        """Abstract property for sql query to be used in loading."""
-        return f'SELECT * FROM {self.table_name} WHERE uuid=\'{self.uuid}\''
-
-    @property
-    def is_uuid_saved(self):
-        """
-        Method to check if the uuid
-         is already saved to prevent double saving.
-         """
-        if self.does_table_exist:
-            try:
-                with dataset.connect(self.db_path_protocol) as db:
-                    t = db[self.table_name]
-                    result = t.find(uuid=str(self.uuid))
-                    if list(result):
-                        # print(result)
-                        log.debug('Found uuid')
-                        return True
-            except Exception:
-                raise
-        return False
-
-    def load(self):
-        """Method to attempt a load from the relevant table."""
-        with dataset.connect(self.db_path_protocol) as db:
-            t = db[self.table_name]
-            result = t.find(uuid=str(self.uuid))
-            return result
-
-    def save(self, data):
-        if not self.is_uuid_saved:
-            with dataset.connect(self.db_path_protocol) as db:
-                t = db[self.table_name]
-                t.insert(data)
-        else:
-            with dataset.connect(self.db_path_protocol) as db:
-                t = db[self.table_name]
-                t.update(data, ['uuid'])
-
-
-class UniqueLookup(SQLInterface):
-    """A lookup interface based on a uuid4 for a unique entry of data."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # If a uuid4 is given, load it. Maybe better in parent classes?
-        # Or have some factory method called here.
-        try:
-            self.uuid = kwargs.pop('uuid')
-            # Do stuff here to populate the data.
-        except KeyError:
-            pass
-
-    @property
-    def uuid(self):
-        if not self._uuid:
-            self._uuid = uuid.uuid4()
-        return str(self._uuid)
-
-    @uuid.setter
-    def uuid(self, val):
-        try:
-            uuid_obj = uuid.UUID(val)
-            setattr(self, "_uuid", uuid_obj)
-        except ValueError:
-            log.error('Supplied uuid is not a valid string for a UUID.')
-            raise
-
-
-class NamespaceLookup(SQLInterface):
-    """A lookup interface based on a config driven uuid5."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        try:
-            self._config = kwargs.pop("config")
-        except KeyError:
-            log.error('No config supplied!')
-            raise
-
-    @property
-    def uuid(self):
-        if self._uuid is None:
-            self._uuid = uuid.uuid5(uuid.NAMESPACE_DNS,
-                                    json.dump(self._config, sort_keys=True))
-        return self._uuid
-
-
-class DataStore:
-    """
-    Base class for datastores. Link classes should inherit from these.
-    """
-
-    def __init__(self, *args, **kwargs):
-        pass
-
-class StructDataStore:
-    """
-    Class to manage an internal data store of
-    """
-
-
-class StructLink:
-    """
-    Class to manage a link between a basic mapping of data
-    and an individual entry in an SQL table.
-    """
-
-    def __init__(self, *args, **kwargs):
-        self.link = UniqueLookup()
-
-
-############################################################################
-# Abstract classes for SQL databases and saving/loading paradigms
-############################################################################
-class Base:
-    """Properties and methods for SQL db functionality."""
-
-    def __init__(self, db_path=None):
-        self.ensure_database()
-        self._db_path = db_path
-
-    @property
-    def db_path(self):
-        """Abstract property for the db location. Implement in derived classes."""
-        if self._db_path is None:
-            return Path(f'{self.__class__.__name__}.db')
-        else:
-            return Path(self._db_path)
-
-    @property
-    def db_path_sql(self):
-        return f'sqlite:///{self.db_path}'
-
-    @property
-    def engine(self):
-        return sqlalchemy.create_engine(self.db_path_sql)
-
-    @property
-    def does_table_exist(self):
-        with dataset.connect(self.db_path_sql) as db:
-            if self.table_name in db.tables:
-                return True
-        return False
-
-    @property
-    @abc.abstractmethod
-    def table_name(self):
-        pass
-
-    def ensure_database(self):
-        """Ensure the database for the type of data exists."""
-        if not self.db_path.is_file():
-            s = create_database_sql(self.db_path)
-            if s:
-                log.info('- db created at path: {}'.format(self.db_path))
-            else:
-                log.error('- failed to create db at path: {}'.format(self.db_path))
-
-    @property
-    def has_loaded_data(self):
-        if hasattr(self, '_has_loaded_data') and self._has_loaded_data is True:
-            return True
-        else:
-            return False
-
-
-class Unique(Base):
-    """Properties for unique objects."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__()
-        try:
-            self.group_uuid4 = kwargs.pop('group_uuid4')
-            # log.debug(f'Call to lookup with {self.group_uuid4}')
-            result = self.load()
-            if not result:
-                log.debug('No data found for this configuration.')
-                raise ValueError(f'group_uuid4 {self.group_uuid4} not found, '
-                                 f'cannot configure object.')
-            elif result is True:
-                log.debug('Found and loaded data for this configuration.')
-                return
-        except KeyError:
-            pass
-
-    @property
-    def group_uuid4(self):
-        if not hasattr(self, '_group_uuid4'):
-            self._group_uuid4 = uuid.uuid4()
-        return str(self._group_uuid4)
-
-    @group_uuid4.setter
-    def group_uuid4(self, val):
-        try:
-            uuid_obj = uuid.UUID(val)
-            setattr(self, "_group_uuid4", uuid_obj)
-        except ValueError:
-            log.error('Supplied group_uuid4 is not a valid string for a uuid.')
-            raise
-
-    @property
-    def table_name(self):
-        return f"table_{self.__class__.__name__}"
-
-    @property
-    def sql_query(self):
-        """Abstract property for sql query to be used in loading."""
-        return f'SELECT * FROM {self.table_name} WHERE group_uuid4=\'{self.group_uuid4}\''
-
-    @property
-    def is_uuid_saved(self):
-        """Method to check if the group_uuid4 is already saved to prevent double saving."""
-        if self.does_table_exist:
-            try:
-                df = pd.read_sql(self.sql_query, self.engine)
-                if not df.empty:
-                    return True
-            except Exception:
-                pass
-        return False
-
-    def delete_group(self):
-        """
-        Method to delete all entries in the table matching the group uuid4 of the data.
-        Should be used when overwriting
-        """
-        with dataset.connect(self.db_path_sql) as db:
-            t = db[self.table_name]
-            t.delete(group_uuid4=str(self.group_uuid4))
-
-
-class Metadata(Base):
-    """Properties for metadata objects."""
-
-    def __init__(self, **kwargs):
-        super().__init__()
-
-        # Ensure lookup attributes are present and given.
-        if not hasattr(self, "_identifiers"):
-            log.error('Subclasses must define self._identifiers, the '
-                           'attributes used in metadata lookups!')
-            raise ValueError('Change your subclass definition.')
-
-        self.attrs = {}
-        for attr in self._identifiers:
-            try:
-                val = kwargs.pop(attr)
-                self.attrs[attr] = val
-            except KeyError:
-                log.error(f'Missing argument "{attr}" for '
-                               f'{self.__class__.__name__} construction.')
-                raise
-
-        result = self.load()
-        if not result:
-            log.debug('No data found for this configuration.')
-        elif result:
-            log.debug('Found and loaded data for this configuration.')
-
-    @property
-    def table_name(self):
-        values = []
-        for attr in sorted(self._identifiers):
-            # If an attr is a list need to make the string
-            # predictable through iteration and ordering.
-            val = self.attrs.get(attr)
-            if (isinstance(val, collections.abc.MutableSequence) or
-                    isinstance(val, tuple)):
-                for element in val:
-                    if (isinstance(element, collections.abc.MutableSequence)
-                            or isinstance(element, tuple)):
-                        raise ValueError('Nested containers are not supported for '
-                                         'lookup attributes.')
-                val = tuple(sorted(val))
-            if isinstance(val, collections.abc.Mapping):
-                raise ValueError('Mappings are not supported for lookup attributes.')
-            values.append(str(val))
-        s = '_'.join(list(values))
-        for char in CHARS_TO_REMOVE:
-            s = s.replace(char, '')
-        return s
-
-    @property
-    def sql_query(self):
-        """Abstract property for sql query to be used in loading."""
-        return f'{self.table_name}'
-
-
-############################################################################
-# Abstract classes for datastores
-############################################################################
-class Frame:
-    """Base class for a frame to be persisted and loaded from SQL."""
-
-    @property
-    def data(self):
-        if not hasattr(self, '_data'):
-            self._data = None
-        if self._data is None:
-            return self._data
-        return self._data
-
-    @data.setter
-    def data(self, new_input):
-        """Take the input and ensure a DataFrame is correctly inserted as data."""
-        # If we get a DataFrame, assign it internally.
-        if isinstance(new_input, pd.DataFrame):
-            df = new_input
-        # If we get a single dict, interpret this as a single row frame.
-        elif isinstance(new_input, dict):
-            df = pd.DataFrame([new_input])
-        # If it's a series, make it a single row frame
-        elif isinstance(new_input, pd.Series):
-            df = pd.DataFrame(new_input).T
-        # Else throw it at the frame constructor.
-        else:
-            try:
-                df = pd.DataFrame(new_input)
-            except Exception:
-                raise
-        if 'dt' not in df.columns:
-            df['dt'] = int(datetime.utcnow().timestamp()*1000)
-        # Internally set the frame.
-        self._data = df
-
-    @property
-    def has_data(self):
-        """Property to indicate if the data is loaded and valid."""
-        if self.data is None:
-            return False
-        if isinstance(self.data, dict):
-            return all(v is None for v in d.values())
-        if isinstance(self.data, pd.DataFrame):
-            return not self.data.empty
-        log.error('Unexpected data type received! Check this class.')
-        return False
-
-    def convert_sql_data(self, df):
-        """Convert the SQL data into the expected python object types."""
-        # Try to eval columns to restore collections.
-        log.debug('Converting string vars')
-        for column in df.columns:
-            try:
-                df[column] = df.apply(lambda row: eval(row[column]), axis=1)
-            except (NameError, SyntaxError, ValueError):
-                pass
-        df.apply(pd.to_numeric, errors='ignore')
-        return df
-
-    def load(self):
-        """Method to load data. If valid data is found, returns True, else False"""
-        if self.does_table_exist:
-            try:
-                df = pd.read_sql(self.sql_query, self.engine)
-                # display(df)
-                df = self.convert_sql_data(df)
-                if df.empty:
-                    return False
-                self.data = df
-                self._has_loaded_data = True
-                # log.debug(f'Loaded data for config.')
-                return True
-            except Exception:
-                raise
-        return False
-
-
-class Mapping:
-    """Base class for a simple mapping, to represent a data store."""
-    @property
-    def data(self):
-        if not hasattr(self, '_data'):
-            self._data = None
-        return self._data
-
-    @data.setter
-    def data(self, new_input):
-        """Take the input and ensure a dict is correctly inserted as data."""
-        if not hasattr(self, '_data'):
-            self._data = None
-        if self._data is not None:
-            log.warning('Internal data store has already been initialised! '
-                             'For safety, the data setter is now disabled, use the generated'
-                             ' and implemented property setters instead.')
-            log.warning(f'Valid setters: {self._data.keys()}')
-            return
-        try:
-            if 'group_uuid4' not in new_input.keys():
-                new_input['group_uuid4'] = self.group_uuid4
-            if 'dt' not in new_input.keys():
-                new_input['dt'] = int(datetime.utcnow().timestamp()*1000)
-            self._data = new_input
-        except (AttributeError, KeyError) as e:
-            log.error(f'Failed to add standard keys and set data store: {e}')
-
-    @property
-    def has_data(self):
-        """Property to indicate if the data is loaded and valid."""
-        if self.data is not None:
-            if isinstance(self._data, dict):
-                return True
-        return False
-
-
-############################################################################
-# Classes that real applications should subclass from.
-############################################################################
-class UniqueFrame(Unique, Frame):
-    """
-    Class for a frame of unique data.
-
-    Subclasses can simply give a name and docstring, e.g.:
-    >>> class MyFrame(UniqueFrame):
-    >>>     pass
-
-    The first instance of MyFrame will create a database MyFrame.db in the
-    specified recording dict.
-
-    If the internal datastore is provided with either a valid frame, or
-    python collections which can be used in the pd.DataFrame constructor,
-    it will be assigned a group_uuid4 for lookup, and a datetime
-    corresponding to when the data was assigned.
-
-    Each row in the frame
-
-    MyFrame.save() can then be used to save the DataFrame to the SQL db,
-    in the table table_MyFrame.
-
-    The group_uuid4 can be used to later retrieve the data with e.g.
-
-    >>> m = MyFrame(group_uuid4='dac2f879-f6d5-40a0-ad98-25806dd6c579')
-
-    which will load the data if it exists, and raise a ValueError if not.
-    """
-
-    def __init__(self, *args, **kwargs):
-        # Ensure database
-        Base.__init__(self)
-        # Load the data if uuid4 is given.
-        Unique.__init__(self, **kwargs)
-
-    @property
-    def data(self):
-        return super().data
-
-    @data.setter
-    def data(self, new_input):
-        """Override Frame setter to also add uuid4s if needed."""
-        Frame.data.fset(self, new_input)
-        df = self._data
-        if 'uuid4' not in df.columns:
-            df['uuid4'] = [uuid.uuid4() for _ in range(len(df.index))]
-        if 'group_uuid4' not in df.columns:
-            df['group_uuid4'] = self.group_uuid4
-        # Internally set the frame.
-        self._data = df
-
-    def save(self):
-        """
-        Method to persist the data to the relevant db. All cells converted to strings.
-        """
-        if self.is_group_uuid4_saved:
-            self.delete_group()
-
-        if not self.has_data:
-            log.warning(f'Call to save data without any data set!')
-            return
-
-        data_copy = self.data.copy().astype(str)
-        data_copy.to_sql(self.table_name, self.engine, if_exists="append", index=False)
-        log.debug(f'Persisted data to table {self.table_name}.')
-
-
-class MetadataFrame(Frame, Metadata):
-    """
-    Class for a frame of metadata.
-
-    Subclasses are required to give a property _identifiers, containing a
-    list of attribute names to be used in the lookup.
-
-    >>> class MyMetadata(MetadataFrame):
-    >>>     _identifiers = ['name', 'age']
-
-    Identifiers are not permitted to be nested collections or mappings.
-    Strings, unnested lists, numericals etc. are all permitted.
-
-    All instances of MyMetadata will be required to give "name" and "age"
-
-    The first instance of MyMetadata will create a database MyMetadata.db in the
-    specified recording dict.
-    """
-
-    def __init__(self, *args, **kwargs):
-        # Ensure database
-        Base.__init__(self)
-        # Load the data if uuid4 is given.
-        Metadata.__init__(self, **kwargs)
-
-    def save(self):
-        """
-        Method to persist the data to the relevant db.
-        All cells converted to strings.
-        """
-        if not self.has_data:
-            log.debug(f'Empty dataframe is being saved')
-        data_copy = self._data.copy().astype(str)
-        data_copy.to_sql(self.table_name, self.engine, if_exists="replace", index=False)
-        log.info(f'Persisted data to table {self.table_name}.')
-
-    def load(self):
-        # log.debug('Metadata loading')
-        result = Frame.load(self)
-        if result:
-            log.debug(f'Loaded config for {self.table_name}')
-        return result
-
-
-class UniqueMapping(Mapping, Unique):
-    """Class for a unique mapping of data."""
-    def __init__(self, **kwargs):
-        # A container for the last known condition of the data
-        # when it was most recently loaded or saved.
-        self._data_last_save = None
-
-        # Load the data if uuid4 is given.
-        Unique.__init__(self, **kwargs)
-
-        # If data was loaded, skip to property generation
-        if not self.has_loaded_data:
-
-            # Now dynamically set attributes for the data store.
-            # Get all required args. Throw error if missing.
-            # We use an OrderedDict to remember the insertion order,
-            # so the required, optional, and derived attrs go in
-            # in the correct order.
-            attrs = collections.OrderedDict()
-
-            # First any required args.
-            if hasattr(self, '_required_attrs'):
-                for attr in self._required_attrs:
-                    try:
-                        val = kwargs.pop(attr)
-                        attrs[attr] = val
-                    except KeyError:
-                        log.error(f'Missing argument "{attr}" for '
-                                       f'{self.__class__.__name__} construction.')
-                        raise
-
-            # Add optional attrs with defaults second.
-            # Once the setters and getters are generated, we will apply user overrides.
-            if hasattr(self, '_optional_attrs'):
-                for attr, default_value in self._optional_attrs.items():
-                    try:
-                        val = kwargs.pop(attr)
-                        attrs[attr] = val
-                    except KeyError:
-                        attrs[attr] = default_value
-
-            # Add derived attrs last, initialised to None.
-            if hasattr(self, '_derived_attrs'):
-                for attr in self._derived_attrs:
-                    attrs[attr] = None
-
-            # Now make the data, but init to Nones...
-            self.data = dict(zip(attrs.keys(), [None for _ in attrs.keys()]))
-            # ... generate the getter and setters as needed ...
-            self.expand_properties()
-            # ... and use settings, including user defined, to fill the data store.
-            self.set_attrs_with_setters(attrs)
-
-        # If we already have data, just expand the properties.
-        else:
-            self.expand_properties()
-
-    ############################################################################
-    # Properties
-    ############################################################################
-    @property
-    def data(self):
-        if not hasattr(self, '_data'):
-            self._data = None
-        else:
-            self.update_read_only()
-        return self._data
-
-    @data.setter
-    def data(self, new_input):
-        """The mapping data setter is fine, but we need a class definition
-        here for scope reasons."""
-        Mapping.data.fset(self, new_input)
-
-    ############################################################################
-    # Methods for dynamic property setting
-    ############################################################################
-    def set_attrs_with_setters(self, attrs):
-        log.debug('Using property setters to initialise data store values.')
-
-        # Make a list of read-only properties and assign them
-        # after any autogenerated properties.
-        read_only_attrs = {}
-
-        for attr in attrs:
-            # log.debug(f'Configuring datastore attribute: {attr}')
-            if hasattr(self.__class__, attr):
-                # If the attribute has a setter, use it.
-                prop = getattr(self.__class__, attr)
-                if hasattr(prop, 'fset') and prop.fset is not None:
-                    try:
-                        # log.debug(f'Setting attr: {attr}, {attrs[attr]}')
-                        setattr(self, attr, attrs[attr])
-                    except AttributeError:
-                        raise
-                # If it does not, we are dealing with a read only property.
-                # This property's data store value should be initialised to the
-                # getter, and it should be manually set in the save call in
-                # the UniqueMapping functionality.
-                else:
-                    read_only_attrs[attr] = attrs[attr]
-
-        for attr in read_only_attrs:
-            try:
-                # log.debug(f'Setting property for read only store var {attr}')
-                self.set_data_val(attr, None)
-            except AttributeError:
-                raise
-
-    # Functions the user can use in derived class getters and setters,
-    # to always reliably return the data, regardless of this class's structure.
-    # Useful for persistence redevelopments.
-    # DO NOT CALL DIRECTLY IN INSTANCES, just in class bodies.
-    def get_data_val(self, attr):
-        return self._data[attr]
-
-    def set_data_val(self, attr, value):
-        self._data[attr] = value
-
-    def expand_properties(self):
-        """
-        Method to dynamically implement property getters and setters for the
-        attributes in the data store. Respects any manually declared properties
-        in the concrete implementations.
-        """
-        # The below do not need getters or setters, or have specialised ones.
-        to_ignore = ['dt', 'uuid4', 'group_uuid4']
-
-        # Respect attributes with explicitly defined properties.
-        new_props = [k for k in list(self._data.keys()) if
-                     (k not in to_ignore and not hasattr(self.__class__, k))]
-
-        if new_props:
-            log.debug(f'Setting new {self.__class__.__name__} properties: {new_props}')
-        for attr in new_props:
-            setattr(self.__class__, attr,
-                    property(
-                        lambda self, attr=attr: self._data.get(attr),
-                        lambda self, value, attr=attr: self.set_data_val(attr, value)
-                        )
-                    )
-
-    def get_read_only_datastore_properties(self):
-        """Function to interrogate the class and find read only property attributes."""
-        data_store_attrs = [k for k in self._data.keys() if k in dir(self.__class__)]
-        read_only_attrs = [a for a in data_store_attrs if
-                           getattr(self.__class__, a).fset is None]
-        return read_only_attrs
-
-    def update_read_only(self):
-        """
-        Function to update the internal data store for class properties
-        which are read only.
-        """
-        attr_names = self.get_read_only_datastore_properties()
-        # log.warning(f'read only attrs to update: {attr_names}')
-        for attr in attr_names:
-            # log.warning(f'{attr}: {getattr(self, attr)}')
-            self.set_data_val(attr, getattr(self, attr))
-
-    @property
-    def uuid_found(self):
-        """Property to indicate if the data is loaded and valid."""
-        if self.data is None:
-            return False
-        if isinstance(self.data, dict):
-            return all(v is None for v in d.values())
-        if isinstance(self.data, pd.DataFrame):
-            return not self.data.empty
-        log.error('Unexpected data type received! Check this class.')
-        return False
-
-    @property
-    def data_store_as_strs(self):
-        """Method to return a copy of the internal data store, with all
-        attributes converted to strings."""
-        new_d = {}
-        for key, val in self.data.items():
-            if isinstance(val, str):
-                new_d[key] = val
-            else:
-                new_d[key] = repr(val)
-        # log.warning('Dict being saved:')
-        # print(new_d)
-        return new_d
-
-    def save(self):
-        """
-        Method to persist the data store to the relevant db.
-        All cells converted to strings.
-        """
-        if not self.has_data:
-            log.debug(f'Call to save data without any data set!')
-            return
-
-        # Update the read only attributes before the save.
-        self.update_read_only()
-
-        # If the data store is different to the state of the last save, save.
-        if not self._data_last_save == repr(self._data):
-            if self.is_group_uuid4_saved:
-                self.delete_group()
-                print(self._data)
-            self._data_last_save = repr(self.data)
-
-            with dataset.connect(self.db_path_sql) as db:
-                t = db[self.table_name]
-                t.insert(self.data_store_as_strs)
-            log.debug(f'Persisted data to table {self.table_name}')
-        else:
-            log.debug('Data unchanged since last save, not writing')
-
-    # @staticmethod
-    def return_evaluated_dict(self, d):
-        """Method to return the dict with all string values evaled or converted."""
-        new_d = {}
-        log.warning(d)
-
-        # Clumsy as hell, but import the names we need here.
-
-        for attr, val in d.items():
-            try:
-                print(attr, val)
-                if val is not None:
-                    attr_eval = eval(val)
-                    if not isinstance(attr_eval, str):
-                        new_d[attr] = attr_eval
-                    else:
-                        new_d[attr] = str(val)
-                else:
-                    new_d[attr] = val
-            except (NameError, SyntaxError) as e:
-                log.warning(e)
-                new_d[attr] = str(val)
-        log.warning(new_d)
-        return new_d
-
-    def load(self):
-        """Method to load data. If valid data is found, returns True, else False"""
-        # Try to load the mapping from the database.
-        with dataset.connect(self.db_path_sql) as db:
-            t = db[self.table_name]
-            result = t.find(group_uuid4=str(self.group_uuid4))
-
-        result_as_list = list(result)
-        log.warning(f'result_as_list: {result_as_list}')
-        if not result_as_list:
-            log.debug(f'No match found for {self.group_uuid4}')
-            return False
-
-        # If we have a result, format it, and convert the strings
-        # to the required python objects.
-        if len(result_as_list) != 1:
-            log.error(f'db {self.table_name} contains multiple matches for group_uuid4'
-                           f' {self.group_uuid4}, figure out why!')
-            raise ValueError('Multiple uuid4s match.')
-        result = result_as_list[0]
-        result.pop('id')  # remove the automated id from the dataset module.
-        d = self.return_evaluated_dict(result)
-
-        # Assign the internal datastore and the copy for the last persistence interaction.
-        self._data_last_save = repr(d)
-        self.data = d
-
-        # A bool to be used in the inits.
-        self._has_loaded_data = True
-        return True
-
-
-# ############################################################################
-# # Test classes
-# ############################################################################
-# class TestUniqueFrame(UniqueFrame):
-#     """Test class for persisted unique frame objects."""
-#     pass
+# class Metadata(Base):
+#     """Properties for metadata objects."""
 #
+#     def __init__(self, **kwargs):
+#         super().__init__()
 #
-# class TestMetadataFrame(MetadataFrame):
-#     """Test class for persisted metadata frame objects."""
-#     _identifiers = ['name', 'infrastructure']
+#         # Ensure lookup attributes are present and given.
+#         if not hasattr(self, "_identifiers"):
+#             log.error('Subclasses must define self._identifiers, the '
+#                            'attributes used in metadata lookups!')
+#             raise ValueError('Change your subclass definition.')
 #
+#         self.attrs = {}
+#         for attr in self._identifiers:
+#             try:
+#                 val = kwargs.pop(attr)
+#                 self.attrs[attr] = val
+#             except KeyError:
+#                 log.error(f'Missing argument "{attr}" for '
+#                                f'{self.__class__.__name__} construction.')
+#                 raise
 #
-# class TestUniqueMapping(UniqueMapping):
-#     """Test class for persisted unique mappings."""
-#     _required_attrs = ['name', 'age', 'secret_fact']
-#     # These are parameters for the internal data store which will
-#     # be initialised to None, unless a property setter is defined here.
-#     _derived_attrs = ['times_taken_smack_squared']
-#     # Optional attributes need a map to a default.
-#     _optional_attrs = {'impure': True, 'times_taken_smack': 0}
+#         result = self.load()
+#         if not result:
+#             log.debug('No data found for this configuration.')
+#         elif result:
+#             log.debug('Found and loaded data for this configuration.')
 #
 #     @property
-#     def times_taken_smack_squared(self):
-#         return self.times_taken_smack ** 2
+#     def table_name(self):
+#         values = []
+#         for attr in sorted(self._identifiers):
+#             # If an attr is a list need to make the string
+#             # predictable through iteration and ordering.
+#             val = self.attrs.get(attr)
+#             if (isinstance(val, collections.abc.MutableSequence) or
+#                     isinstance(val, tuple)):
+#                 for element in val:
+#                     if (isinstance(element, collections.abc.MutableSequence)
+#                             or isinstance(element, tuple)):
+#                         raise ValueError('Nested containers are not supported for '
+#                                          'lookup attributes.')
+#                 val = tuple(sorted(val))
+#             if isinstance(val, collections.abc.Mapping):
+#                 raise ValueError('Mappings are not supported for lookup attributes.')
+#             values.append(str(val))
+#         s = '_'.join(list(values))
+#         for char in CHARS_TO_REMOVE:
+#             s = s.replace(char, '')
+#         return s
+#
+#     @property
+#     def sql_query(self):
+#         """Abstract property for sql query to be used in loading."""
+#         return f'{self.table_name}'
+#
+#
+# ############################################################################
+# # Abstract classes for datastores
+# ############################################################################
+# class Frame:
+#     """Base class for a frame to be persisted and loaded from SQL."""
+#
+#     @property
+#     def data(self):
+#         if not hasattr(self, '_data'):
+#             self._data = None
+#         if self._data is None:
+#             return self._data
+#         return self._data
+#
+#     @data.setter
+#     def data(self, new_input):
+#         """Take the input and ensure a DataFrame is correctly inserted as data."""
+#         # If we get a DataFrame, assign it internally.
+#         if isinstance(new_input, pd.DataFrame):
+#             df = new_input
+#         # If we get a single dict, interpret this as a single row frame.
+#         elif isinstance(new_input, dict):
+#             df = pd.DataFrame([new_input])
+#         # If it's a series, make it a single row frame
+#         elif isinstance(new_input, pd.Series):
+#             df = pd.DataFrame(new_input).T
+#         # Else throw it at the frame constructor.
+#         else:
+#             try:
+#                 df = pd.DataFrame(new_input)
+#             except Exception:
+#                 raise
+#         if 'dt' not in df.columns:
+#             df['dt'] = int(datetime.utcnow().timestamp()*1000)
+#         # Internally set the frame.
+#         self._data = df
+#
+#     @property
+#     def has_data(self):
+#         """Property to indicate if the data is loaded and valid."""
+#         if self.data is None:
+#             return False
+#         if isinstance(self.data, dict):
+#             return all(v is None for v in d.values())
+#         if isinstance(self.data, pd.DataFrame):
+#             return not self.data.empty
+#         log.error('Unexpected data type received! Check this class.')
+#         return False
+#
+#     def convert_sql_data(self, df):
+#         """Convert the SQL data into the expected python object types."""
+#         # Try to eval columns to restore collections.
+#         log.debug('Converting string vars')
+#         for column in df.columns:
+#             try:
+#                 df[column] = df.apply(lambda row: eval(row[column]), axis=1)
+#             except (NameError, SyntaxError, ValueError):
+#                 pass
+#         df.apply(pd.to_numeric, errors='ignore')
+#         return df
+#
+#     def load(self):
+#         """Method to load data. If valid data is found, returns True, else False"""
+#         if self.does_table_exist:
+#             try:
+#                 df = pd.read_sql(self.sql_query, self.engine)
+#                 # display(df)
+#                 df = self.convert_sql_data(df)
+#                 if df.empty:
+#                     return False
+#                 self.data = df
+#                 self._has_loaded_data = True
+#                 # log.debug(f'Loaded data for config.')
+#                 return True
+#             except Exception:
+#                 raise
+#         return False
+#
+#
+# class Mapping:
+#     """Base class for a simple mapping, to represent a data store."""
+#     @property
+#     def data(self):
+#         if not hasattr(self, '_data'):
+#             self._data = None
+#         return self._data
+#
+#     @data.setter
+#     def data(self, new_input):
+#         """Take the input and ensure a dict is correctly inserted as data."""
+#         if not hasattr(self, '_data'):
+#             self._data = None
+#         if self._data is not None:
+#             log.warning('Internal data store has already been initialised! '
+#                              'For safety, the data setter is now disabled, use the generated'
+#                              ' and implemented property setters instead.')
+#             log.warning(f'Valid setters: {self._data.keys()}')
+#             return
+#         try:
+#             if 'group_uuid4' not in new_input.keys():
+#                 new_input['group_uuid4'] = self.group_uuid4
+#             if 'dt' not in new_input.keys():
+#                 new_input['dt'] = int(datetime.utcnow().timestamp()*1000)
+#             self._data = new_input
+#         except (AttributeError, KeyError) as e:
+#             log.error(f'Failed to add standard keys and set data store: {e}')
+#
+#     @property
+#     def has_data(self):
+#         """Property to indicate if the data is loaded and valid."""
+#         if self.data is not None:
+#             if isinstance(self._data, dict):
+#                 return True
+#         return False
+#
+#
+# ############################################################################
+# # Classes that real applications should subclass from.
+# ############################################################################
+# class UniqueFrame(Unique, Frame):
+#     """
+#     Class for a frame of unique data.
+#
+#     Subclasses can simply give a name and docstring, e.g.:
+#     >>> class MyFrame(UniqueFrame):
+#     >>>     pass
+#
+#     The first instance of MyFrame will create a database MyFrame.db in the
+#     specified recording dict.
+#
+#     If the internal datastore is provided with either a valid frame, or
+#     python collections which can be used in the pd.DataFrame constructor,
+#     it will be assigned a group_uuid4 for lookup, and a datetime
+#     corresponding to when the data was assigned.
+#
+#     Each row in the frame
+#
+#     MyFrame.save() can then be used to save the DataFrame to the SQL db,
+#     in the table table_MyFrame.
+#
+#     The group_uuid4 can be used to later retrieve the data with e.g.
+#
+#     >>> m = MyFrame(group_uuid4='dac2f879-f6d5-40a0-ad98-25806dd6c579')
+#
+#     which will load the data if it exists, and raise a ValueError if not.
+#     """
+#
+#     def __init__(self, *args, **kwargs):
+#         # Ensure database
+#         Base.__init__(self)
+#         # Load the data if uuid4 is given.
+#         Unique.__init__(self, **kwargs)
+#
+#     @property
+#     def data(self):
+#         return super().data
+#
+#     @data.setter
+#     def data(self, new_input):
+#         """Override Frame setter to also add uuid4s if needed."""
+#         Frame.data.fset(self, new_input)
+#         df = self._data
+#         if 'uuid4' not in df.columns:
+#             df['uuid4'] = [uuid.uuid4() for _ in range(len(df.index))]
+#         if 'group_uuid4' not in df.columns:
+#             df['group_uuid4'] = self.group_uuid4
+#         # Internally set the frame.
+#         self._data = df
+#
+#     def save(self):
+#         """
+#         Method to persist the data to the relevant db. All cells converted to strings.
+#         """
+#         if self.is_group_uuid4_saved:
+#             self.delete_group()
+#
+#         if not self.has_data:
+#             log.warning(f'Call to save data without any data set!')
+#             return
+#
+#         data_copy = self.data.copy().astype(str)
+#         data_copy.to_sql(self.table_name, self.engine, if_exists="append", index=False)
+#         log.debug(f'Persisted data to table {self.table_name}.')
+#
+#
+# class MetadataFrame(Frame, Metadata):
+#     """
+#     Class for a frame of metadata.
+#
+#     Subclasses are required to give a property _identifiers, containing a
+#     list of attribute names to be used in the lookup.
+#
+#     >>> class MyMetadata(MetadataFrame):
+#     >>>     _identifiers = ['name', 'age']
+#
+#     Identifiers are not permitted to be nested collections or mappings.
+#     Strings, unnested lists, numericals etc. are all permitted.
+#
+#     All instances of MyMetadata will be required to give "name" and "age"
+#
+#     The first instance of MyMetadata will create a database MyMetadata.db in the
+#     specified recording dict.
+#     """
+#
+#     def __init__(self, *args, **kwargs):
+#         # Ensure database
+#         Base.__init__(self)
+#         # Load the data if uuid4 is given.
+#         Metadata.__init__(self, **kwargs)
+#
+#     def save(self):
+#         """
+#         Method to persist the data to the relevant db.
+#         All cells converted to strings.
+#         """
+#         if not self.has_data:
+#             log.debug(f'Empty dataframe is being saved')
+#         data_copy = self._data.copy().astype(str)
+#         data_copy.to_sql(self.table_name, self.engine, if_exists="replace", index=False)
+#         log.info(f'Persisted data to table {self.table_name}.')
+#
+#     def load(self):
+#         # log.debug('Metadata loading')
+#         result = Frame.load(self)
+#         if result:
+#             log.debug(f'Loaded config for {self.table_name}')
+#         return result
+#
+#
+# class UniqueMapping(Mapping, Unique):
+#     """Class for a unique mapping of data."""
+#     def __init__(self, **kwargs):
+#         # A container for the last known condition of the data
+#         # when it was most recently loaded or saved.
+#         self._data_last_save = None
+#
+#         # Load the data if uuid4 is given.
+#         Unique.__init__(self, **kwargs)
+#
+#         # If data was loaded, skip to property generation
+#         if not self.has_loaded_data:
+#
+#             # Now dynamically set attributes for the data store.
+#             # Get all required args. Throw error if missing.
+#             # We use an OrderedDict to remember the insertion order,
+#             # so the required, optional, and derived attrs go in
+#             # in the correct order.
+#             attrs = collections.OrderedDict()
+#
+#             # First any required args.
+#             if hasattr(self, '_required_attrs'):
+#                 for attr in self._required_attrs:
+#                     try:
+#                         val = kwargs.pop(attr)
+#                         attrs[attr] = val
+#                     except KeyError:
+#                         log.error(f'Missing argument "{attr}" for '
+#                                        f'{self.__class__.__name__} construction.')
+#                         raise
+#
+#             # Add optional attrs with defaults second.
+#             # Once the setters and getters are generated, we will apply user overrides.
+#             if hasattr(self, '_optional_attrs'):
+#                 for attr, default_value in self._optional_attrs.items():
+#                     try:
+#                         val = kwargs.pop(attr)
+#                         attrs[attr] = val
+#                     except KeyError:
+#                         attrs[attr] = default_value
+#
+#             # Add derived attrs last, initialised to None.
+#             if hasattr(self, '_derived_attrs'):
+#                 for attr in self._derived_attrs:
+#                     attrs[attr] = None
+#
+#             # Now make the data, but init to Nones...
+#             self.data = dict(zip(attrs.keys(), [None for _ in attrs.keys()]))
+#             # ... generate the getter and setters as needed ...
+#             self.expand_properties()
+#             # ... and use settings, including user defined, to fill the data store.
+#             self.set_attrs_with_setters(attrs)
+#
+#         # If we already have data, just expand the properties.
+#         else:
+#             self.expand_properties()
+#
+#     ############################################################################
+#     # Properties
+#     ############################################################################
+#     @property
+#     def data(self):
+#         if not hasattr(self, '_data'):
+#             self._data = None
+#         else:
+#             self.update_read_only()
+#         return self._data
+#
+#     @data.setter
+#     def data(self, new_input):
+#         """The mapping data setter is fine, but we need a class definition
+#         here for scope reasons."""
+#         Mapping.data.fset(self, new_input)
+#
+#     ############################################################################
+#     # Methods for dynamic property setting
+#     ############################################################################
+#     def set_attrs_with_setters(self, attrs):
+#         log.debug('Using property setters to initialise data store values.')
+#
+#         # Make a list of read-only properties and assign them
+#         # after any autogenerated properties.
+#         read_only_attrs = {}
+#
+#         for attr in attrs:
+#             # log.debug(f'Configuring datastore attribute: {attr}')
+#             if hasattr(self.__class__, attr):
+#                 # If the attribute has a setter, use it.
+#                 prop = getattr(self.__class__, attr)
+#                 if hasattr(prop, 'fset') and prop.fset is not None:
+#                     try:
+#                         # log.debug(f'Setting attr: {attr}, {attrs[attr]}')
+#                         setattr(self, attr, attrs[attr])
+#                     except AttributeError:
+#                         raise
+#                 # If it does not, we are dealing with a read only property.
+#                 # This property's data store value should be initialised to the
+#                 # getter, and it should be manually set in the save call in
+#                 # the UniqueMapping functionality.
+#                 else:
+#                     read_only_attrs[attr] = attrs[attr]
+#
+#         for attr in read_only_attrs:
+#             try:
+#                 # log.debug(f'Setting property for read only store var {attr}')
+#                 self.set_data_val(attr, None)
+#             except AttributeError:
+#                 raise
+#
+#     # Functions the user can use in derived class getters and setters,
+#     # to always reliably return the data, regardless of this class's structure.
+#     # Useful for persistence redevelopments.
+#     # DO NOT CALL DIRECTLY IN INSTANCES, just in class bodies.
+#     def get_data_val(self, attr):
+#         return self._data[attr]
+#
+#     def set_data_val(self, attr, value):
+#         self._data[attr] = value
+#
+#     def expand_properties(self):
+#         """
+#         Method to dynamically implement property getters and setters for the
+#         attributes in the data store. Respects any manually declared properties
+#         in the concrete implementations.
+#         """
+#         # The below do not need getters or setters, or have specialised ones.
+#         to_ignore = ['dt', 'uuid4', 'group_uuid4']
+#
+#         # Respect attributes with explicitly defined properties.
+#         new_props = [k for k in list(self._data.keys()) if
+#                      (k not in to_ignore and not hasattr(self.__class__, k))]
+#
+#         if new_props:
+#             log.debug(f'Setting new {self.__class__.__name__} properties: {new_props}')
+#         for attr in new_props:
+#             setattr(self.__class__, attr,
+#                     property(
+#                         lambda self, attr=attr: self._data.get(attr),
+#                         lambda self, value, attr=attr: self.set_data_val(attr, value)
+#                         )
+#                     )
+#
+#     def get_read_only_datastore_properties(self):
+#         """Function to interrogate the class and find read only property attributes."""
+#         data_store_attrs = [k for k in self._data.keys() if k in dir(self.__class__)]
+#         read_only_attrs = [a for a in data_store_attrs if
+#                            getattr(self.__class__, a).fset is None]
+#         return read_only_attrs
+#
+#     def update_read_only(self):
+#         """
+#         Function to update the internal data store for class properties
+#         which are read only.
+#         """
+#         attr_names = self.get_read_only_datastore_properties()
+#         # log.warning(f'read only attrs to update: {attr_names}')
+#         for attr in attr_names:
+#             # log.warning(f'{attr}: {getattr(self, attr)}')
+#             self.set_data_val(attr, getattr(self, attr))
+#
+#     @property
+#     def uuid_found(self):
+#         """Property to indicate if the data is loaded and valid."""
+#         if self.data is None:
+#             return False
+#         if isinstance(self.data, dict):
+#             return all(v is None for v in d.values())
+#         if isinstance(self.data, pd.DataFrame):
+#             return not self.data.empty
+#         log.error('Unexpected data type received! Check this class.')
+#         return False
+#
+#     @property
+#     def data_store_as_strs(self):
+#         """Method to return a copy of the internal data store, with all
+#         attributes converted to strings."""
+#         new_d = {}
+#         for key, val in self.data.items():
+#             if isinstance(val, str):
+#                 new_d[key] = val
+#             else:
+#                 new_d[key] = repr(val)
+#         # log.warning('Dict being saved:')
+#         # print(new_d)
+#         return new_d
+#
+#     def save(self):
+#         """
+#         Method to persist the data store to the relevant db.
+#         All cells converted to strings.
+#         """
+#         if not self.has_data:
+#             log.debug(f'Call to save data without any data set!')
+#             return
+#
+#         # Update the read only attributes before the save.
+#         self.update_read_only()
+#
+#         # If the data store is different to the state of the last save, save.
+#         if not self._data_last_save == repr(self._data):
+#             if self.is_group_uuid4_saved:
+#                 self.delete_group()
+#                 print(self._data)
+#             self._data_last_save = repr(self.data)
+#
+#             with dataset.connect(self.db_path_sql) as db:
+#                 t = db[self.table_name]
+#                 t.insert(self.data_store_as_strs)
+#             log.debug(f'Persisted data to table {self.table_name}')
+#         else:
+#             log.debug('Data unchanged since last save, not writing')
+#
+#     # @staticmethod
+#     def return_evaluated_dict(self, d):
+#         """Method to return the dict with all string values evaled or converted."""
+#         new_d = {}
+#         log.warning(d)
+#
+#         # Clumsy as hell, but import the names we need here.
+#
+#         for attr, val in d.items():
+#             try:
+#                 print(attr, val)
+#                 if val is not None:
+#                     attr_eval = eval(val)
+#                     if not isinstance(attr_eval, str):
+#                         new_d[attr] = attr_eval
+#                     else:
+#                         new_d[attr] = str(val)
+#                 else:
+#                     new_d[attr] = val
+#             except (NameError, SyntaxError) as e:
+#                 log.warning(e)
+#                 new_d[attr] = str(val)
+#         log.warning(new_d)
+#         return new_d
+#
+#     def load(self):
+#         """Method to load data. If valid data is found, returns True, else False"""
+#         # Try to load the mapping from the database.
+#         with dataset.connect(self.db_path_sql) as db:
+#             t = db[self.table_name]
+#             result = t.find(group_uuid4=str(self.group_uuid4))
+#
+#         result_as_list = list(result)
+#         log.warning(f'result_as_list: {result_as_list}')
+#         if not result_as_list:
+#             log.debug(f'No match found for {self.group_uuid4}')
+#             return False
+#
+#         # If we have a result, format it, and convert the strings
+#         # to the required python objects.
+#         if len(result_as_list) != 1:
+#             log.error(f'db {self.table_name} contains multiple matches for group_uuid4'
+#                            f' {self.group_uuid4}, figure out why!')
+#             raise ValueError('Multiple uuid4s match.')
+#         result = result_as_list[0]
+#         result.pop('id')  # remove the automated id from the dataset module.
+#         d = self.return_evaluated_dict(result)
+#
+#         # Assign the internal datastore and the copy for the last persistence interaction.
+#         self._data_last_save = repr(d)
+#         self.data = d
+#
+#         # A bool to be used in the inits.
+#         self._has_loaded_data = True
+#         return True
+#
+#
+# # ############################################################################
+# # # Test classes
+# # ############################################################################
+# # class TestUniqueFrame(UniqueFrame):
+# #     """Test class for persisted unique frame objects."""
+# #     pass
+# #
+# #
+# # class TestMetadataFrame(MetadataFrame):
+# #     """Test class for persisted metadata frame objects."""
+# #     _identifiers = ['name', 'infrastructure']
+# #
+# #
+# # class TestUniqueMapping(UniqueMapping):
+# #     """Test class for persisted unique mappings."""
+# #     _required_attrs = ['name', 'age', 'secret_fact']
+# #     # These are parameters for the internal data store which will
+# #     # be initialised to None, unless a property setter is defined here.
+# #     _derived_attrs = ['times_taken_smack_squared']
+# #     # Optional attributes need a map to a default.
+# #     _optional_attrs = {'impure': True, 'times_taken_smack': 0}
+# #
+# #     @property
+# #     def times_taken_smack_squared(self):
+# #         return self.times_taken_smack ** 2

@@ -2,14 +2,16 @@ import abc
 import dataset
 import logging
 import os
+import json
 import uuid
+import sqlalchemy
 from pathlib import Path
 
 log = logging.getLogger(__name__)
 
 
 def create_database_sql(
-        filepath="database.db",
+        file_path="database.db",
         command="sqlite3 {filepath} \"create table aTable"
                 "(field1 int); drop table aTable;\"",
         path_expansions=True):
@@ -18,28 +20,28 @@ def create_database_sql(
     """
     try:
         if path_expansions:
-            filepath = Path(filepath).expanduser()
-        log.debug(f'Creating database: {filepath}')
-        os.system(command.format(filepath=filepath))
-        return filepath
+            file_path = Path(file_path).expanduser()
+        log.debug(f'Creating database: {file_path}')
+        os.system(command.format(filepath=file_path))
+        return file_path
     except Exception:
-        log.warning(f'error creating database {filepath}', exc_info=1)
+        log.warning(f'error creating database {file_path}', exc_info=1)
         return False
 
 
 class SQLInterface:
     """Class to handle all interactions with SQL databases."""
 
-    def __init__(self, db_path=None, table_name='data', uuid=None):
+    def __init__(self, db_path=None, table_name='data', datalink_uuid=None):
         self._db_path = db_path
         self._table_name = table_name
-        self._uuid = uuid
+        self._uuid = datalink_uuid
         self.ensure_database()
-        self._loaded_data = None
+        self.loaded_data = None
         # Try to load.
-        if uuid and self.is_uuid_saved:
+        if datalink_uuid and self.is_uuid_saved:
             print('Loading')
-            self._loaded_data = self.load()
+            self.loaded_data = self.load()
 
     @property
     def db_path(self):
@@ -84,7 +86,7 @@ class SQLInterface:
     @property
     def sql_load_query(self):
         """Abstract property for sql query to be used in loading."""
-        return f'SELECT * FROM {self.table_name} WHERE uuid=\'{self.uuid}\''
+        return f'SELECT * FROM {self.table_name} WHERE datalink_uuid=\'{self.uuid}\''
 
     @property
     def is_uuid_saved(self):
@@ -96,7 +98,7 @@ class SQLInterface:
             try:
                 with dataset.connect(self.db_path_protocol) as db:
                     t = db[self.table_name]
-                    result = t.find(uuid=str(self.uuid))
+                    result = t.find(datalink_uuid=str(self.uuid))
                     if list(result):
                         # print(result)
                         log.debug('Found uuid')
@@ -109,7 +111,7 @@ class SQLInterface:
         """Method to attempt a load from the relevant table."""
         with dataset.connect(self.db_path_protocol) as db:
             t = db[self.table_name]
-            result = t.find(uuid=str(self.uuid))
+            result = t.find(datalink_uuid=str(self.uuid))
             return result
 
     def save(self, data):
@@ -120,7 +122,7 @@ class SQLInterface:
         else:
             with dataset.connect(self.db_path_protocol) as db:
                 t = db[self.table_name]
-                t.update(data, ['uuid'])
+                t.update(data, ['datalink_uuid'])
 
 
 class UniqueLookup(SQLInterface):

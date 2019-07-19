@@ -33,19 +33,25 @@ class DataStore:
     def __init__(self, link='unique', **kwargs):
         self._hash_previous = None
         self._data = self._data_fields
+
+        # Dynamically generate any required class properties.
         for key in self._data:
             if not hasattr(self.__class__, key):
                 setattr(self.__class__, key, DataStoreDescriptor(key))
+
+        # Perform a first hashing of the data from the defaults.
         self._get_data_hash()
 
-        # Establish link and attempt a load.
+        # Establish link
         if link == 'unique':
             self.link = datalink.links.UniqueLookup(table_name=self.table_name,
-                                              db_path=self.db_path,
-                                              **kwargs)
+                                                    db_path=self.db_path,
+                                                    **kwargs)
         elif link == 'metadata':
             self.link = datalink.links.NamespaceLookup(**kwargs)
-        if self.link._loaded_data:
+
+        # Check for any found data and initialise it.
+        if self.link.loaded_data:
             self._format_loaded_data()
 
     # Properties for interfacing with the link to save, and to handle
@@ -69,17 +75,21 @@ class DataStore:
                 except TypeError:
                     raise
         # Add the uuid
-        d['uuid'] = self.link.uuid
+        d['datalink_uuid'] = self.link.uuid
         return d
 
     def _format_loaded_data(self):
-        results = list(self.link._loaded_data)
+        """
+        Take the loaded data and format it back into python objects.
+        Should only be called in initialisation.
+        """
+        results = list(self.link.loaded_data)
         if len(results) != 1:
             log.warning(f'Ambiguous uuid in loading of data,'
                         f' received {len(results)} results.')
         d = results[0]
         d.pop('id')
-        d.pop('uuid')
+        d.pop('datalink_uuid')
         for k, v in d.items():
             try:
                 d[k] = ast.literal_eval(v)
@@ -104,7 +114,7 @@ class DataStore:
         """
         for k in kwargs:
             if k not in self.data:
-                raise KeyError(f'update received a non-datastore parameter: {k}')
+                raise KeyError(f'update received a non data store parameter: {k}')
         for i, (k, v) in enumerate(kwargs.items()):
             if i == len(kwargs) - 1:
                 setattr(self, k, v)
@@ -148,3 +158,26 @@ class DataStore:
             return False
         else:
             return True
+
+# from pandas.util import hash_pandas_object
+# import pandas as pd
+# import numpy as np
+
+# np.random.seed(42)
+# arr = np.random.choice(['foo', 'bar', 42], size=(3,4))
+# df = pd.DataFrame(arr)
+
+# df
+# h = hash_pandas_object(df)
+# type(h)
+# h
+
+# arr = np.random.choice(['foo', 'bar', 42], size=(3,4))
+# df = pd.DataFrame(arr)
+# df
+# h2 = hash_pandas_object(df)
+# type(h2)
+# h2
+# h3 = h2.copy()
+# h.equals(h2)
+# h2.equals(h3)
