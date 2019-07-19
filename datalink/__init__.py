@@ -7,20 +7,33 @@ __version__ = '0.0.1'
 __email__ = 'sogilvy@protonmail.com'
 
 import logging
+import collections.abc
 import datalink.links as dllinks
 import datalink.stores as dlstores
 
 log = logging.getLogger(__name__)
 
 
-def link_factory(db_path=None, table_name=None, data_fields=None):
+def link_factory(
+        name=None, db_path=None,
+        table_name=None, data_fields=None
+        ):
     """
     Factory function to produce a new class derived from DataStore.
     """
     class NewClass(dlstores.DataStore):
         pass
+    if not name:
+        raise ValueError('name is a required field.')
+    NewClass.__name__ = name
+    if not db_path:
+        raise ValueError('db_path is a required field.')
     NewClass.db_path = db_path
+    if not table_name:
+        raise ValueError('table_name is a required field.')
     NewClass.table_name = table_name
+    if not data_fields and not isinstance(data_fields, collections.abc.Mapping):
+        raise ValueError('data_fields must be a valid mapping.')
     NewClass._data_fields = data_fields
     return NewClass
 

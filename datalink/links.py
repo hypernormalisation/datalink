@@ -40,7 +40,7 @@ class SQLInterface:
         self.loaded_data = None
         # Try to load.
         if datalink_uuid and self.is_uuid_saved:
-            print('Loading')
+            log.debug(f'Loading data corresponding to uuid f{self.uuid}')
             self.loaded_data = self.load()
 
     @property
@@ -100,8 +100,7 @@ class SQLInterface:
                     t = db[self.table_name]
                     result = t.find(datalink_uuid=str(self.uuid))
                     if list(result):
-                        # print(result)
-                        log.debug('Found uuid')
+                        # log.debug('Found uuid')
                         return True
             except Exception:
                 raise
@@ -117,10 +116,12 @@ class SQLInterface:
     def save(self, data):
         if not self.is_uuid_saved:
             with dataset.connect(self.db_path_protocol) as db:
+                log.debug('Creating new database entry.')
                 t = db[self.table_name]
                 t.insert(data)
         else:
             with dataset.connect(self.db_path_protocol) as db:
+                log.debug(f'Updating existing database entry for uuid {self.uuid}.')
                 t = db[self.table_name]
                 t.update(data, ['datalink_uuid'])
 

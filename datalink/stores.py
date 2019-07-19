@@ -58,7 +58,7 @@ class DataStore:
     # translation between SQL friendly data and the python objects in
     # the data store.
     def _save_state(self):
-        log.debug('Call to _save_state.')
+        # log.debug('Call to _save_state.')
         self.link.save(self._sql_friendly_data)
 
     @property
