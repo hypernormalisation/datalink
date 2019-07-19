@@ -29,8 +29,9 @@ class DataStore:
     db_path = None
     table_name = None
     _data_fields = {}
+    _config = None
 
-    def __init__(self, link='unique', **kwargs):
+    def __init__(self, config=None, **kwargs):
         self._hash_previous = None
         self._data = self._data_fields
 
@@ -39,20 +40,32 @@ class DataStore:
             if not hasattr(self.__class__, key):
                 setattr(self.__class__, key, DataStoreDescriptor(key))
 
+        # Intercept any field initialisations.
+        d = {}
+        for k, v in kwargs.items():
+            if k in self._data_fields:
+                d[k] = v
+        for k in d:
+            kwargs.pop(k)
+
         # Perform a first hashing of the data from the defaults.
-        self._get_data_hash()
+        self._set_data_hash()
 
         # Establish link
-        if link == 'unique':
+        if not self._config:
             self.link = datalink.links.UniqueLookup(table_name=self.table_name,
                                                     db_path=self.db_path,
                                                     **kwargs)
-        elif link == 'metadata':
+        else:
             self.link = datalink.links.NamespaceLookup(**kwargs)
 
         # Check for any found data and initialise it.
         if self.link.loaded_data:
             self._format_loaded_data()
+        # Else initialise any variables from the declaration.
+        else:
+            if d:
+                self.update(**d)
 
     # Properties for interfacing with the link to save, and to handle
     # translation between SQL friendly data and the python objects in
@@ -136,6 +149,9 @@ class DataStore:
                         d[key] = tuple(val)
                     except TypeError:
                         raise
+                else:
+                    raise ValueError(f'Unsupported data store value {val}'
+                                     f'in field {key}.')
         return d
 
     def _get_data_hash(self):

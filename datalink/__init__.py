@@ -16,30 +16,45 @@ log = logging.getLogger(__name__)
 
 def link_factory(
         name=None, db_path=None,
-        table_name=None, data_fields=None
+        table_name=None, data_fields=None, config=None
         ):
     """
     Factory function to produce a new class derived from DataStore.
     """
     class NewClass(dlstores.DataStore):
         pass
+
     if not name:
         raise ValueError('name is a required field.')
     NewClass.__name__ = name
+
     if not db_path:
         raise ValueError('db_path is a required field.')
     NewClass.db_path = db_path
+
     if not table_name:
         raise ValueError('table_name is a required field.')
     NewClass.table_name = table_name
+
     if not data_fields and not isinstance(data_fields, collections.abc.Mapping):
         raise ValueError('data_fields must be a valid mapping.')
     NewClass._data_fields = data_fields
+
+    # Handle namespace lookup config - not working at present.
+    if config:
+        NewClass._config = config
     return NewClass
 
 
 def test_output():
     log.info('logging from datalink')
+
+
+# Nonstandard lookup functionality is UNDER CONSTRUCTION
+# MyStore2 = datalink.link_factory(name='MyStore2', db_path='/tmp/test2.db', table_name='data',
+#                                  config='client_id',
+#                                  data_fields={'name': None, 'age': None, 'postcode': None})
+# s = MyStore2(name='John Doe', age=36, postcode='M1 111')
 
 
 # class Metadata(Base):

@@ -40,7 +40,7 @@ class SQLInterface:
         self.loaded_data = None
         # Try to load.
         if datalink_uuid and self.is_uuid_saved:
-            log.debug(f'Loading data corresponding to uuid f{self.uuid}')
+            log.debug(f'Loading data corresponding to uuid {self.uuid}')
             self.loaded_data = self.load()
 
     @property
@@ -116,7 +116,7 @@ class SQLInterface:
     def save(self, data):
         if not self.is_uuid_saved:
             with dataset.connect(self.db_path_protocol) as db:
-                log.debug('Creating new database entry.')
+                log.debug(f'Creating new database entry with uuid {self.uuid}.')
                 t = db[self.table_name]
                 t.insert(data)
         else:
@@ -162,7 +162,9 @@ class NamespaceLookup(SQLInterface):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         try:
-            self._config = kwargs.pop("config")
+            config = kwargs.pop("config")
+            if isinstance(config, str):
+                self._config = [config]
         except KeyError:
             log.error('No config supplied!')
             raise
