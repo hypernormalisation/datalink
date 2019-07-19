@@ -69,8 +69,6 @@ class SQLInterface:
 
     def ensure_database(self):
         """Ensure the database for the type of data exists."""
-        # print(self.db_path.is_file()) #.expanduser()
-        # print(self.db_path.expanduser().is_file())  # .expanduser()
         if not self.db_path.is_file():
             s = create_database_sql(self.db_path)
             if s:

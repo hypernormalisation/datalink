@@ -4,8 +4,23 @@ import collections.abc
 import json
 import datalink.links
 import logging
+from weakref import WeakKeyDictionary
 
 log = logging.getLogger(__name__)
+
+
+class ConfigDescriptor(object):
+    """A descriptor that gives access to the config"""
+
+    def __init__(self, default):
+        self.default = default
+        self.data = WeakKeyDictionary()
+
+    def __get__(self, instance, owner):
+        return self.data.get(instance, self.default)
+
+    def __set__(self, instance, value):
+        self.data[instance] = value
 
 
 class DataStoreDescriptor(object):
@@ -58,6 +73,10 @@ class DataStore:
                                                     **kwargs)
         else:
             self.link = datalink.links.NamespaceLookup(**kwargs)
+            # Assign the config descriptors.
+            for key in self._config:
+                if not hasattr(self.__class__, key):
+                    setattr(self.__class__, key, ConfigDescriptor(key))
 
         # Check for any found data and initialise it.
         if self.link.loaded_data:
