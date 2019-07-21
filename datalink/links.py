@@ -6,6 +6,8 @@ import json
 import uuid
 import sqlalchemy
 from pathlib import Path
+import collections.abc
+import datalink.utils as dlutils
 
 log = logging.getLogger(__name__)
 
@@ -32,14 +34,23 @@ def create_database_sql(
 class SQLInterface:
     """Class to handle all interactions with SQL databases."""
 
-    def __init__(self, db_path=None, table_name='data', datalink_uuid=None):
+    def __init__(self, db_path=None, table_name='data',
+                 lookup=None,
+                 datalink_uuid=None, **kwargs):
+        if not db_path:
+            raise ValueError('db_path is a required field')
         self._db_path = db_path
         self._table_name = table_name
         self._uuid = datalink_uuid
         self.ensure_database()
         self.loaded_data = None
+        try:
+            self._lookup_dict = kwargs['lookup']
+        except KeyError:
+            pass
+
         # Try to load.
-        if datalink_uuid and self.is_uuid_saved:
+        if self.is_uuid_saved and (datalink_uuid or lookup):
             log.debug(f'Loading data corresponding to uuid {self.uuid}')
             self.loaded_data = self.load()
 
@@ -115,6 +126,7 @@ class SQLInterface:
         if not self.is_uuid_saved:
             with dataset.connect(self.db_path_protocol) as db:
                 log.debug(f'Creating new database entry with uuid {self.uuid}.')
+                print(data)
                 t = db[self.table_name]
                 t.insert(data)
         else:
@@ -157,19 +169,18 @@ class UniqueLookup(SQLInterface):
 class NamespaceLookup(SQLInterface):
     """A lookup interface based on a config driven uuid5."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
         try:
-            config = kwargs.pop("config")
-            if isinstance(config, str):
-                self._config = [config]
-        except KeyError:
-            log.error('No config supplied!')
+            self._lookup_dict = kwargs.get('lookup')
+        except Exception:
             raise
+        super().__init__(**kwargs)
+        print(kwargs)
+        for key in kwargs:
+            print(key)
 
     @property
     def uuid(self):
-        if self._uuid is None:
-            self._uuid = uuid.uuid5(uuid.NAMESPACE_DNS,
-                                    json.dump(self._config, sort_keys=True))
-        return self._uuid
+        u = uuid.uuid5(uuid.NAMESPACE_DNS,
+                       json.dumps(self._lookup_dict, sort_keys=True))
+        return str(u)

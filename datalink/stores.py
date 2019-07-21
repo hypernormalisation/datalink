@@ -4,39 +4,9 @@ import collections.abc
 import json
 import datalink.links
 import logging
-from weakref import WeakKeyDictionary
+import datalink.utils as dlutils
 
 log = logging.getLogger(__name__)
-
-
-class ConfigDescriptor(object):
-    """A descriptor that gives access to the config"""
-
-    def __init__(self, default):
-        self.default = default
-        self.data = WeakKeyDictionary()
-
-    def __get__(self, instance, owner):
-        return self.data.get(instance, self.default)
-
-    def __set__(self, instance, value):
-        self.data[instance] = value
-
-
-class DataStoreDescriptor(object):
-    """A descriptor for the relevant key in the data store."""
-
-    def __init__(self, key):
-        self.key = key
-
-    def __get__(self, instance, owner):
-        return instance._data[self.key]
-
-    def __set__(self, instance, value):
-        instance._data[self.key] = value
-        if instance._has_data_updated:
-            instance._save_state()
-            instance._set_data_hash()
 
 
 class DataStore:
@@ -44,16 +14,17 @@ class DataStore:
     db_path = None
     table_name = None
     _data_fields = {}
-    _config = None
+    _lookup_keys = []
 
-    def __init__(self, config=None, **kwargs):
+    def __init__(self, **kwargs):
         self._hash_previous = None
         self._data = self._data_fields
+        print(kwargs)
 
         # Dynamically generate any required class properties.
-        for key in self._data:
-            if not hasattr(self.__class__, key):
-                setattr(self.__class__, key, DataStoreDescriptor(key))
+        # for key in self._data:
+        #     if not hasattr(self.__class__, key):
+        #         setattr(self.__class__, key, dlutils.DataStoreDescriptor(key))
 
         # Intercept any field initialisations.
         d = {}
@@ -66,17 +37,32 @@ class DataStore:
         # Perform a first hashing of the data from the defaults.
         self._set_data_hash()
 
+        # If non-standard lookup is employed, set properties as needed.
+        for key in self._lookup_keys:
+            # print(key)
+            # if not hasattr(self.__class__, key):
+            #     setattr(self.__class__, key, dlutils.ConfigDescriptor(''))
+            try:
+                setattr(self, key, kwargs.pop(key))
+            except KeyError as e:
+                raise KeyError(f'{self.__class__.__name__} requires {e} as argument')
+
         # Establish link
-        if not self._config:
+        if not self._lookup_keys:
             self.link = datalink.links.UniqueLookup(table_name=self.table_name,
                                                     db_path=self.db_path,
                                                     **kwargs)
         else:
-            self.link = datalink.links.NamespaceLookup(**kwargs)
-            # Assign the config descriptors.
-            for key in self._config:
-                if not hasattr(self.__class__, key):
-                    setattr(self.__class__, key, ConfigDescriptor(key))
+            lookup_dict = {}
+            for k in self._lookup_keys:
+                lookup_dict[k] = getattr(self, k)
+            print(f'lookup dict: {lookup_dict}')
+            self.link = datalink.links.NamespaceLookup(table_name=self.table_name,
+                                                       db_path=self.db_path,
+                                                       lookup=lookup_dict,
+                                                       **kwargs)
+            # Assign the config descriptors if necessary.
+
 
         # Check for any found data and initialise it.
         if self.link.loaded_data:

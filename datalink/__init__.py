@@ -10,13 +10,15 @@ import logging
 import collections.abc
 import datalink.links as dllinks
 import datalink.stores as dlstores
+import datalink.utils as dlutils
+
 
 log = logging.getLogger(__name__)
 
 
 def link_factory(
         name=None, db_path=None,
-        table_name=None, data_fields=None, config=None
+        table_name=None, data_fields=None, lookup=None
         ):
     """
     Factory function to produce a new class derived from DataStore.
@@ -41,20 +43,34 @@ def link_factory(
     NewClass._data_fields = data_fields
 
     # Handle namespace lookup config - not working at present.
-    if config:
-        NewClass._config = config
+    if lookup:
+        print(lookup)
+        if isinstance(lookup, str):
+            NewClass._lookup_keys = [lookup]
+            setattr(NewClass, lookup, dlutils.ConfigDescriptor(''))
+        elif isinstance(lookup, collections.abc.Iterable):
+            NewClass._lookup_keys = lookup
+            for key in lookup:
+                setattr(NewClass, key, dlutils.ConfigDescriptor(''))
+        else:
+            raise ValueError('Lookup type is not supported, must be str or iterable.'
+                             f' Received {lookup}')
+
+        # Dynamically generate lookup properties.
+        # for key in lookup:
+        #     print(key)
+        #     setattr(NewClass, key, dlutils.ConfigDescriptor(''))
+
+    # Generate data store properties dynamically
+    for key in data_fields:
+        # if not hasattr(NewClass, key):
+        setattr(NewClass, key, dlutils.DataStoreDescriptor(key))
+
     return NewClass
 
 
 def test_output():
     log.info('logging from datalink')
-
-
-# Nonstandard lookup functionality is UNDER CONSTRUCTION
-# MyStore2 = datalink.link_factory(name='MyStore2', db_path='/tmp/test2.db', table_name='data',
-#                                  config='client_id',
-#                                  data_fields={'name': None, 'age': None, 'postcode': None})
-# s = MyStore2(name='John Doe', age=36, postcode='M1 111')
 
 
 # class Metadata(Base):
