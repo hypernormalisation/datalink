@@ -6,6 +6,7 @@ import json
 import uuid
 import sqlalchemy
 from pathlib import Path
+import datalink.errors
 import collections.abc
 import datalink.utils as dlutils
 
@@ -35,13 +36,13 @@ class SQLInterface:
     """Class to handle all interactions with SQL databases."""
 
     def __init__(self, db_path=None, table_name='data',
-                 lookup=None,
-                 datalink_uuid=None, **kwargs):
+                 link_id=None, **kwargs):
         if not db_path:
             raise ValueError('db_path is a required field')
         self._db_path = db_path
         self._table_name = table_name
-        self._uuid = datalink_uuid
+        # self._id = None
+        self._id = link_id
         self.ensure_database()
         self.loaded_data = None
         try:
@@ -50,8 +51,8 @@ class SQLInterface:
             pass
 
         # Try to load.
-        if self.is_uuid_saved and (datalink_uuid or lookup):
-            log.debug(f'Loading data corresponding to uuid {self.uuid}')
+        if self.is_id_saved and link_id:
+            log.debug(f'Loading data corresponding to uuid {self.id}')
             self.loaded_data = self.load()
 
     @property
@@ -89,27 +90,32 @@ class SQLInterface:
 
     @property
     @abc.abstractmethod
-    def uuid(self):
+    def id(self):
+        pass
+
+    @id.setter
+    @abc.abstractmethod
+    def id(self, value):
         pass
 
     @property
     def sql_load_query(self):
         """Abstract property for sql query to be used in loading."""
-        return f'SELECT * FROM {self.table_name} WHERE datalink_uuid=\'{self.uuid}\''
+        return f'SELECT * FROM {self.table_name} WHERE id=\'{self.id}\''
 
     @property
-    def is_uuid_saved(self):
+    def is_id_saved(self):
         """
         Method to check if the uuid
-         is already saved to prevent double saving.
-         """
+        is already saved to prevent double saving.
+        """
         if self.does_table_exist:
             try:
                 with dataset.connect(self.db_path_protocol) as db:
                     t = db[self.table_name]
-                    result = t.find(datalink_uuid=str(self.uuid))
+                    result = t.find(id=str(self.id))
                     if list(result):
-                        # log.debug('Found uuid')
+                        log.debug(f'Found id {self.id}')
                         return True
             except Exception:
                 raise
@@ -119,68 +125,51 @@ class SQLInterface:
         """Method to attempt a load from the relevant table."""
         with dataset.connect(self.db_path_protocol) as db:
             t = db[self.table_name]
-            result = t.find(datalink_uuid=str(self.uuid))
+            result = t.find(id=str(self.id))
             return result
 
     def save(self, data):
-        if not self.is_uuid_saved:
+        """Method to save or update the relevant entry in the table."""
+        if not self.is_id_saved:
             with dataset.connect(self.db_path_protocol) as db:
-                log.debug(f'Creating new database entry with uuid {self.uuid}.')
-                print(data)
-                t = db[self.table_name]
+                log.debug(f'Creating new database entry with id {self.id}.')
+                # print(data)
+                # print(db.tables)
+                if self.table_name in db.tables:
+                    t = db[self.table_name]
+                else:
+                    t = db.create_table(self.table_name, primary_id=False)
                 t.insert(data)
         else:
             with dataset.connect(self.db_path_protocol) as db:
-                log.debug(f'Updating existing database entry for uuid {self.uuid}.')
+                log.debug(f'Updating existing database entry for id {self.id}.')
                 t = db[self.table_name]
-                t.update(data, ['datalink_uuid'])
+                t.update(data, ['id'])
 
 
-class UniqueLookup(SQLInterface):
+class UUIDLookup(SQLInterface):
     """A lookup interface based on a uuid4 for a unique entry of data."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # If a uuid4 is given, load it. Maybe better in parent classes?
-        # Or have some factory method called here.
-        try:
-            self.uuid = kwargs.pop('uuid')
-            # Do stuff here to populate the data.
-        except KeyError:
-            pass
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # If the user supplied a lookup but it was not found,
+        # throw an exception.
+        if kwargs['link_id'] and not self.loaded_data:
+            raise datalink.errors.LookupError('id supplied but entry not found')
 
     @property
-    def uuid(self):
-        if not self._uuid:
-            self._uuid = uuid.uuid4()
-        return str(self._uuid)
+    def id(self):
+        if not self._id:
+            self._id = uuid.uuid4()
+        return str(self._id)
 
-    @uuid.setter
-    def uuid(self, val):
+    @id.setter
+    def id(self, val):
+        # if self._id:
+        #     raise ValueError('id already set')
         try:
             uuid_obj = uuid.UUID(val)
-            setattr(self, "_uuid", uuid_obj)
+            setattr(self, "_id", uuid_obj)
         except ValueError:
-            log.error('Supplied uuid is not a valid string for a UUID.')
+            log.error('Supplied id is not a valid UUID.')
             raise
-
-
-class NamespaceLookup(SQLInterface):
-    """A lookup interface based on a config driven uuid5."""
-
-    def __init__(self, **kwargs):
-        try:
-            self._lookup_dict = kwargs.get('lookup')
-        except Exception:
-            raise
-        super().__init__(**kwargs)
-        print(kwargs)
-        for key in kwargs:
-            print(key)
-
-    @property
-    def uuid(self):
-        u = uuid.uuid5(uuid.NAMESPACE_DNS,
-                       json.dumps(self._lookup_dict, sort_keys=True))
-        return str(u)

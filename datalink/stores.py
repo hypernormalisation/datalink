@@ -4,7 +4,6 @@ import collections.abc
 import json
 import datalink.links
 import logging
-import datalink.utils as dlutils
 
 log = logging.getLogger(__name__)
 
@@ -14,17 +13,20 @@ class DataStore:
     db_path = None
     table_name = None
     _data_fields = {}
-    _lookup_keys = []
+    lookup = 'uuid'
 
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
+
+        if args and not len(args) == 1:
+            raise ValueError('Only takes 0 or 1 positional arguments.')
+
         self._hash_previous = None
         self._data = self._data_fields
-        print(kwargs)
+        # print(args, kwargs)
 
-        # Dynamically generate any required class properties.
-        # for key in self._data:
-        #     if not hasattr(self.__class__, key):
-        #         setattr(self.__class__, key, dlutils.DataStoreDescriptor(key))
+        link_id = None
+        if args:
+            link_id = args[0]
 
         # Intercept any field initialisations.
         d = {}
@@ -37,32 +39,8 @@ class DataStore:
         # Perform a first hashing of the data from the defaults.
         self._set_data_hash()
 
-        # If non-standard lookup is employed, set properties as needed.
-        for key in self._lookup_keys:
-            # print(key)
-            # if not hasattr(self.__class__, key):
-            #     setattr(self.__class__, key, dlutils.ConfigDescriptor(''))
-            try:
-                setattr(self, key, kwargs.pop(key))
-            except KeyError as e:
-                raise KeyError(f'{self.__class__.__name__} requires {e} as argument')
-
         # Establish link
-        if not self._lookup_keys:
-            self.link = datalink.links.UniqueLookup(table_name=self.table_name,
-                                                    db_path=self.db_path,
-                                                    **kwargs)
-        else:
-            lookup_dict = {}
-            for k in self._lookup_keys:
-                lookup_dict[k] = getattr(self, k)
-            print(f'lookup dict: {lookup_dict}')
-            self.link = datalink.links.NamespaceLookup(table_name=self.table_name,
-                                                       db_path=self.db_path,
-                                                       lookup=lookup_dict,
-                                                       **kwargs)
-            # Assign the config descriptors if necessary.
-
+        self.link = self.get_link(link_id)
 
         # Check for any found data and initialise it.
         if self.link.loaded_data:
@@ -71,6 +49,22 @@ class DataStore:
         else:
             if d:
                 self.update(**d)
+            # If default, save anyway.
+            else:
+                self._save_state()
+
+    def get_link(self, link_id):
+        """Factory method to construct the link."""
+        if self.lookup == 'uuid':
+            return datalink.links.UUIDLookup(table_name=self.table_name,
+                                             db_path=self.db_path,
+                                             link_id=link_id)
+        elif self.lookup == 'int':
+            pass
+        elif self.lookup == 'user':
+            pass
+        else:
+            raise ValueError(self.lookup)
 
     # Properties for interfacing with the link to save, and to handle
     # translation between SQL friendly data and the python objects in
@@ -93,7 +87,7 @@ class DataStore:
                 except TypeError:
                     raise
         # Add the uuid
-        d['datalink_uuid'] = self.link.uuid
+        d['id'] = self.link.id
         return d
 
     def _format_loaded_data(self):
@@ -107,7 +101,6 @@ class DataStore:
                         f' received {len(results)} results.')
         d = results[0]
         d.pop('id')
-        d.pop('datalink_uuid')
         for k, v in d.items():
             try:
                 d[k] = ast.literal_eval(v)
@@ -117,12 +110,19 @@ class DataStore:
 
     # Properties for accessing and updating the data store.
     @property
+    def is_loaded_from_db(self):
+        if self.link.loaded_data:
+            return True
+        else:
+            return False
+
+    @property
     def data(self):
         return self._data
 
     @property
-    def uuid(self):
-        return self.link.uuid
+    def id(self):
+        return self.link.id
 
     def update(self, **kwargs):
         """
@@ -179,26 +179,3 @@ class DataStore:
             return False
         else:
             return True
-
-# from pandas.util import hash_pandas_object
-# import pandas as pd
-# import numpy as np
-
-# np.random.seed(42)
-# arr = np.random.choice(['foo', 'bar', 42], size=(3,4))
-# df = pd.DataFrame(arr)
-
-# df
-# h = hash_pandas_object(df)
-# type(h)
-# h
-
-# arr = np.random.choice(['foo', 'bar', 42], size=(3,4))
-# df = pd.DataFrame(arr)
-# df
-# h2 = hash_pandas_object(df)
-# type(h2)
-# h2
-# h3 = h2.copy()
-# h.equals(h2)
-# h2.equals(h3)
