@@ -45,13 +45,15 @@ class DataStore:
         # Check for any found data and initialise it.
         if self.link.loaded_data:
             self._format_loaded_data()
-        # Else initialise any variables from the declaration.
-        else:
-            if d:
-                self.update(**d)
-            # If default, save anyway.
-            else:
-                self._save_state()
+
+        # Initialise any variables from the declaration.
+        if d:
+            self.update(**d)
+        # print(self.link.loaded_data)
+
+        # If default config and a new entry, save anyway.
+        if not d and not self.link.loaded_data:
+            self._save_state()
 
     def get_link(self, link_id):
         """Factory method to construct the link."""
@@ -59,10 +61,12 @@ class DataStore:
             return datalink.links.UUIDLookup(table_name=self.table_name,
                                              db_path=self.db_path,
                                              link_id=link_id)
-        elif self.lookup == 'int':
-            pass
-        elif self.lookup == 'user':
-            pass
+        # elif self.lookup == 'int':
+        #     pass
+        # elif self.lookup == 'user':
+        #     return datalink.links.UserLookup(table_name=self.table_name,
+        #                                      db_path=self.db_path,
+        #                                      link_id=link_id)
         else:
             raise ValueError(self.lookup)
 

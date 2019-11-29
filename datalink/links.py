@@ -2,13 +2,10 @@ import abc
 import dataset
 import logging
 import os
-import json
 import uuid
 import sqlalchemy
 from pathlib import Path
-import datalink.errors
-import collections.abc
-import datalink.utils as dlutils
+
 
 log = logging.getLogger(__name__)
 
@@ -52,7 +49,7 @@ class SQLInterface:
 
         # Try to load.
         if self.is_id_saved and link_id:
-            log.debug(f'Loading data corresponding to uuid {self.id}')
+            log.debug(f'Loading data corresponding to ID: {self.id}')
             self.loaded_data = self.load()
 
     @property
@@ -148,14 +145,14 @@ class SQLInterface:
 
 
 class UUIDLookup(SQLInterface):
-    """A lookup interface based on a uuid4 for a unique entry of data."""
+    """A lookup interface based on a uuid for a unique entry of data."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # If the user supplied a lookup but it was not found,
         # throw an exception.
-        if kwargs['link_id'] and not self.loaded_data:
-            raise datalink.errors.LookupError('id supplied but entry not found')
+        # if kwargs['link_id'] and not self.loaded_data:
+        #     raise datalink.errors.LookupError('ID supplied but entry not found')
 
     @property
     def id(self):
@@ -163,13 +160,26 @@ class UUIDLookup(SQLInterface):
             self._id = uuid.uuid4()
         return str(self._id)
 
-    @id.setter
-    def id(self, val):
-        # if self._id:
-        #     raise ValueError('id already set')
-        try:
-            uuid_obj = uuid.UUID(val)
-            setattr(self, "_id", uuid_obj)
-        except ValueError:
-            log.error('Supplied id is not a valid UUID.')
-            raise
+    # @id.setter
+    # def id(self, val):
+    #     # if self._id:
+    #     #     raise ValueError('id already set')
+    #     try:
+    #         uuid_obj = uuid.UUID(val)
+    #         setattr(self, "_id", uuid_obj)
+    #     except ValueError:
+    #         log.error('Supplied id is not a valid UUID.')
+    #         raise
+
+
+# class UserLookup(SQLInterface):
+#     """Lookup interface based on user defined lookups."""
+#
+#     def __init__(self, **kwargs):
+#         if not kwargs['link_id']:
+#             raise ValueError('User defined lookup requires an ID as first positional arg')
+#         super().__init__(**kwargs)
+#
+#     @property
+#     def id(self):
+#         return str(self._id)
