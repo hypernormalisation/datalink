@@ -12,17 +12,17 @@ log = logging.getLogger(__name__)
 
 def create_database_sql(
         file_path="database.db",
-        command="sqlite3 {filepath} \"create table aTable"
+        command="sqlite3 {file_path} \"create table aTable"
                 "(field1 int); drop table aTable;\"",
         path_expansions=True):
     """
-    Create a database at a specified filepath.
+    Create a database at a specified file path.
     """
     try:
         if path_expansions:
             file_path = Path(file_path).expanduser()
         log.debug(f'Creating database: {file_path}')
-        os.system(command.format(filepath=file_path))
+        os.system(command.format(file_path=file_path))
         return file_path
     except Exception:
         log.warning(f'error creating database {file_path}', exc_info=1)
@@ -38,7 +38,6 @@ class SQLInterface:
             raise ValueError('db_path is a required field')
         self._db_path = db_path
         self._table_name = table_name
-        # self._id = None
         self._id = link_id
         self.ensure_database()
         self.loaded_data = None
@@ -90,11 +89,6 @@ class SQLInterface:
     def id(self):
         pass
 
-    @id.setter
-    @abc.abstractmethod
-    def id(self, value):
-        pass
-
     @property
     def sql_load_query(self):
         """Abstract property for sql query to be used in loading."""
@@ -112,7 +106,7 @@ class SQLInterface:
                     t = db[self.table_name]
                     result = t.find(id=str(self.id))
                     if list(result):
-                        log.debug(f'Found id {self.id}')
+                        # log.debug(f'Found id {self.id}')
                         return True
             except Exception:
                 raise
@@ -130,8 +124,6 @@ class SQLInterface:
         if not self.is_id_saved:
             with dataset.connect(self.db_path_protocol) as db:
                 log.debug(f'Creating new database entry with id {self.id}.')
-                # print(data)
-                # print(db.tables)
                 if self.table_name in db.tables:
                     t = db[self.table_name]
                 else:
@@ -145,41 +137,10 @@ class SQLInterface:
 
 
 class UUIDLookup(SQLInterface):
-    """A lookup interface based on a uuid for a unique entry of data."""
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        # If the user supplied a lookup but it was not found,
-        # throw an exception.
-        # if kwargs['link_id'] and not self.loaded_data:
-        #     raise datalink.errors.LookupError('ID supplied but entry not found')
+    """A lookup interface with a uuid as auto-generated entry identifier."""
 
     @property
     def id(self):
         if not self._id:
             self._id = uuid.uuid4()
         return str(self._id)
-
-    # @id.setter
-    # def id(self, val):
-    #     # if self._id:
-    #     #     raise ValueError('id already set')
-    #     try:
-    #         uuid_obj = uuid.UUID(val)
-    #         setattr(self, "_id", uuid_obj)
-    #     except ValueError:
-    #         log.error('Supplied id is not a valid UUID.')
-    #         raise
-
-
-# class UserLookup(SQLInterface):
-#     """Lookup interface based on user defined lookups."""
-#
-#     def __init__(self, **kwargs):
-#         if not kwargs['link_id']:
-#             raise ValueError('User defined lookup requires an ID as first positional arg')
-#         super().__init__(**kwargs)
-#
-#     @property
-#     def id(self):
-#         return str(self._id)

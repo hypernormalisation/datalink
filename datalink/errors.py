@@ -1,6 +1,6 @@
-class DatalinkError(Exception):
-    pass
-
-
-class LookupError(DatalinkError):
-    pass
+# class DatalinkError(Exception):
+#     pass
+#
+#
+# class LookupError(DatalinkError):
+#     pass

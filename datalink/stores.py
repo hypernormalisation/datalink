@@ -22,7 +22,6 @@ class DataStore:
 
         self._hash_previous = None
         self._data = self._data_fields
-        # print(args, kwargs)
 
         link_id = None
         if args:
@@ -49,7 +48,6 @@ class DataStore:
         # Initialise any variables from the declaration.
         if d:
             self.update(**d)
-        # print(self.link.loaded_data)
 
         # If default config and a new entry, save anyway.
         if not d and not self.link.loaded_data:
@@ -57,16 +55,10 @@ class DataStore:
 
     def get_link(self, link_id):
         """Factory method to construct the link."""
-        if self.lookup == 'uuid':
+        if self.lookup == 'uuid':  # Only uuid supported at present.
             return datalink.links.UUIDLookup(table_name=self.table_name,
                                              db_path=self.db_path,
                                              link_id=link_id)
-        # elif self.lookup == 'int':
-        #     pass
-        # elif self.lookup == 'user':
-        #     return datalink.links.UserLookup(table_name=self.table_name,
-        #                                      db_path=self.db_path,
-        #                                      link_id=link_id)
         else:
             raise ValueError(self.lookup)
 
@@ -74,7 +66,6 @@ class DataStore:
     # translation between SQL friendly data and the python objects in
     # the data store.
     def _save_state(self):
-        # log.debug('Call to _save_state.')
         self.link.save(self._sql_friendly_data)
 
     @property
@@ -147,7 +138,7 @@ class DataStore:
     # in the internal data store state.
     @property
     def _hashable_data(self):
-        """Make any unhashable values in the data store hashable."""
+        """Make any un-hashable values in the data store hashable."""
         d = copy.deepcopy(self._data)
         for key, val in d.items():
             if isinstance(val, collections.abc.Hashable):
@@ -166,7 +157,7 @@ class DataStore:
     def _get_data_hash(self):
         """
         Creates a hash of the internal data store, casting
-        unhashable types to hashables where possible.
+        un-hashable types to hashable where possible.
         """
         d = self._hashable_data
         # Make a hash and assign it.
