@@ -38,11 +38,13 @@ def link_factory(
     NewClass.__name__ = name
     NewClass.db_path = db_path
     NewClass.table_name = table_name
-    NewClass._data_fields = data_fields
+    NewClass._datastore_map = data_fields
+    NewClass._datastore_atts = [k for k in NewClass._datastore_map]
+    NewClass._datastore_traits = [f'{attr}_trait' for attr in NewClass._datastore_atts]
     NewClass.lookup = lookup
 
     # Generate data store properties dynamically
-    for key in data_fields:
-        setattr(NewClass, key, dlutils.DataStoreDescriptor(key))
+    # for key in data_fields:
+    #     setattr(NewClass, key, dlutils.DataStoreDescriptor(key))
 
     return NewClass
