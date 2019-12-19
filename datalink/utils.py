@@ -1,22 +1,34 @@
-# from traits.api import List
-# import collections.abc
+from traits.api import Int, Float, Str, List, HasTraits
 
-#
-# class DataStoreDescriptor:
-#     """A descriptor for the relevant key in the data store."""
-#
-#     def __init__(self, key):
-#         self.key = key
-#
-#     def __get__(self, instance, owner):
-#         return instance._data[self.key]
-#
-#     def __set__(self, instance, value):
-#         # if (isinstance(value, collections.abc.Sequence)
-#         #         and not isinstance(value, str)):
-#         #     instance._data[self.key] = List(value)
-#         # else:
-#         instance._data[self.key] = value
-#         if instance._has_data_updated:
-#             instance._save_state()
-#             instance._set_data_hash()
+
+# Classes to make traits work.
+class ListEntry(HasTraits):
+    val = List()
+    def __init__(self, v):
+        self.val = v
+
+
+class IntEntry(HasTraits):
+    val = Int(0)
+    def __init__(self, v):
+        self.val = v
+
+
+class FloatEntry(HasTraits):
+    val = Float(0.0)
+    def __init__(self, v):
+        self.val = v
+
+
+class StringEntry(HasTraits):
+    val = Str('')
+    def __init__(self, v):
+        self.val = v
+
+
+trait_assignment_dict = {
+    int: IntEntry,
+    float: FloatEntry,
+    list: ListEntry,
+    str: StringEntry,
+}

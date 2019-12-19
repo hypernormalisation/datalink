@@ -4,29 +4,11 @@ import logging
 import os
 import uuid
 import sqlalchemy
+import sqlalchemy_utils
 from pathlib import Path
 
 
 log = logging.getLogger(__name__)
-
-
-def create_database_sql(
-        file_path="database.db",
-        command="sqlite3 {file_path} \"create table aTable"
-                "(field1 int); drop table aTable;\"",
-        path_expansions=True):
-    """
-    Create a database at a specified file path.
-    """
-    try:
-        if path_expansions:
-            file_path = Path(file_path).expanduser()
-        log.debug(f'Creating database: {file_path}')
-        os.system(command.format(file_path=file_path))
-        return file_path
-    except Exception:
-        log.warning(f'error creating database {file_path}', exc_info=1)
-        return False
 
 
 class SQLInterface:
@@ -77,12 +59,14 @@ class SQLInterface:
 
     def ensure_database(self):
         """Ensure the database for the type of data exists."""
-        if not self.db_path.is_file():
-            s = create_database_sql(self.db_path)
-            if s:
+        if not sqlalchemy_utils.database_exists(self.db_path_protocol):
+            try:
+                s = sqlalchemy_utils.create_database(self.db_path_protocol)
                 log.info('- db created at path: {}'.format(self.db_path))
-            else:
+            except sqlalchemy.exc.SQLAlchemyError as e:
                 log.error('- failed to create db at path: {}'.format(self.db_path))
+                log.error(e)
+                raise
 
     @property
     @abc.abstractmethod

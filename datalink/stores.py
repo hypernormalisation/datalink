@@ -3,43 +3,10 @@ import ast
 import collections.abc
 import datalink.links
 import logging
-from traits.api import *
+from datalink.utils import trait_assignment_dict
+from traits.api import HasTraits
 
 log = logging.getLogger(__name__)
-
-
-# Classes to make traits work.
-class ListEntry(HasTraits):
-    val = List()
-    def __init__(self, v):
-        self.val = v
-
-
-class IntEntry(HasTraits):
-    val = Int(0)
-    def __init__(self, v):
-        self.val = v
-
-
-class FloatEntry(HasTraits):
-    val = Float(0.0)
-    def __init__(self, v):
-        self.val = v
-
-
-class StringEntry(HasTraits):
-    val = Str('')
-    def __init__(self, v):
-        self.val = v
-
-
-# clumsy as fuck
-trait_assignment_dict = {
-    int: IntEntry,
-    float: FloatEntry,
-    list: ListEntry,
-    str: StringEntry,
-}
 
 
 class DataStore(HasTraits):
@@ -48,8 +15,8 @@ class DataStore(HasTraits):
     table_name = None
     _data_fields = {}
     _datastore_map = {}  # populated in manufactured classes
-    self._datastore_atts = []
-    self._datastore_traits = []
+    _datastore_atts = []
+    _datastore_traits = []
     lookup = 'uuid'
 
     def __init__(self, *args, **kwargs):
@@ -88,14 +55,11 @@ class DataStore(HasTraits):
             link_id = args[0]
         self.link = self.get_link(link_id)
 
-        # print(self.link.id)
-
         # Check for any found data and initialise it.
         if self.link.loaded_data:
             self._format_loaded_data()
         # Save new entries.
         else:
-            # print(self.data)
             self._save_state()
 
     # Intercept trait calls.
