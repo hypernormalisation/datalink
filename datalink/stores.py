@@ -4,21 +4,62 @@ import collections.abc
 import json
 import datalink.links
 import logging
+from traits.api import *
 
 log = logging.getLogger(__name__)
 
 
-class DataStore:
+# Classes to make traits work.
+class ListEntry(HasTraits):
+    val = List()
+    def __init__(self, v):
+        self.val = v
+
+
+class IntEntry(HasTraits):
+    val = Int(0)
+    def __init__(self, v):
+        self.val = v
+
+
+class FloatEntry(HasTraits):
+    val = Float(0.0)
+    def __init__(self, v):
+        self.val = v
+
+
+class StringEntry(HasTraits):
+    val = Str('')
+    def __init__(self, v):
+        self.val = v
+
+
+# clumsy as fuck
+trait_assignment_dict = {
+    int: IntEntry,
+    float: FloatEntry,
+    list: ListEntry,
+    str: StringEntry,
+}
+
+class DataStore(HasTraits):
     """Class for a basic mapping data store."""
     db_path = None
     table_name = None
     _data_fields = {}
+    _datastore_map = {}  # populated in manufactured classes
+
     lookup = 'uuid'
 
     def __init__(self, *args, **kwargs):
 
         if args and not len(args) == 1:
             raise ValueError('Only takes 0 or 1 positional arguments.')
+
+        self._instance_map = copy.deepcopy(self._datastore_map)
+
+        self._datastore_atts = [k for k in self._instance_map]
+        self._datastore_traits = [f'{attr}_trait' for attr in self._datastore_atts]
 
         self._hash_previous = None
         self._data = self._data_fields
