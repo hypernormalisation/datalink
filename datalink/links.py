@@ -11,18 +11,25 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 
+dialect_map = {
+    'sqlite': 'sqlite:///{}'
+}
+
+
 class SQLInterface:
     """Class to handle all interactions with SQL databases."""
 
     def __init__(self, db_path=None, table_name='data',
-                 link_id=None, **kwargs):
+                 link_id=None, dialect='sqlite', **kwargs):
         if not db_path:
             raise ValueError('db_path is a required field')
         self._db_path = db_path
         self._table_name = table_name
         self._id = link_id
-        self.ensure_database()
+        self.dialect = dialect
         self.loaded_data = None
+
+        self.ensure_database()
         try:
             self._lookup_dict = kwargs['lookup']
         except KeyError:
@@ -40,7 +47,8 @@ class SQLInterface:
 
     @property
     def db_path_protocol(self):
-        return f'sqlite:///{self.db_path}'
+        pattern = dialect_map[self.dialect]
+        return pattern.format(self.db_path)
 
     @property
     def engine(self):
@@ -73,10 +81,10 @@ class SQLInterface:
     def id(self):
         pass
 
-    @property
-    def sql_load_query(self):
-        """Abstract property for sql query to be used in loading."""
-        return f'SELECT * FROM {self.table_name} WHERE id=\'{self.id}\''
+    # @property
+    # def sql_load_query(self):
+    #     """Abstract property for sql query to be used in loading."""
+    #     return f'SELECT * FROM {self.table_name} WHERE id=\'{self.id}\''
 
     @property
     def is_id_saved(self):

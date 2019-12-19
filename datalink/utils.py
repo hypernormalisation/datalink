@@ -1,4 +1,4 @@
-from traits.api import Int, Float, Str, List, HasTraits
+from traits.api import Int, Float, Str, List, HasTraits, Tuple
 
 
 # Classes to make traits work.
@@ -26,9 +26,15 @@ class StringEntry(HasTraits):
         self.val = v
 
 
+class TupleEntry(HasTraits):
+    val = Tuple()
+    def __init__(self, v):
+        self.val = v
+
 trait_assignment_dict = {
     int: IntEntry,
     float: FloatEntry,
     list: ListEntry,
     str: StringEntry,
+    tuple: TupleEntry,
 }

@@ -22,7 +22,8 @@ def test_output():
 
 def link_factory(
         name=None, db_path=None,
-        table_name=None, data_fields=None, lookup='uuid'
+        table_name=None, data_fields=None, lookup='uuid',
+        dialect='sqlite',
         ):
     """
     Factory function to produce a new class derived from DataStore.
@@ -39,12 +40,6 @@ def link_factory(
     NewClass.db_path = db_path
     NewClass.table_name = table_name
     NewClass._datastore_map = data_fields
-    NewClass._datastore_atts = [k for k in NewClass._datastore_map]
-    NewClass._datastore_traits = [f'{attr}_trait' for attr in NewClass._datastore_atts]
     NewClass.lookup = lookup
-
-    # Generate data store properties dynamically
-    # for key in data_fields:
-    #     setattr(NewClass, key, dlutils.DataStoreDescriptor(key))
-
+    NewClass.dialect = dialect
     return NewClass

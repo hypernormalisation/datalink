@@ -15,9 +15,8 @@ class DataStore(HasTraits):
     table_name = None
     _data_fields = {}
     _datastore_map = {}  # populated in manufactured classes
-    _datastore_atts = []
-    _datastore_traits = []
-    lookup = 'uuid'
+    lookup = None
+    dialect = None
 
     def __init__(self, *args, **kwargs):
 
@@ -44,7 +43,7 @@ class DataStore(HasTraits):
                     break
             else:
                 print('No matching type!')
-            getattr(self, trait).on_trait_change(self._save_state, 'val[]')
+            getattr(self, trait).on_trait_change(self._conditional_save_state, 'val[]')
 
         # Flags for internal operation.
         self._save_flag = True
@@ -53,6 +52,8 @@ class DataStore(HasTraits):
         link_id = None
         if args:
             link_id = args[0]
+        if 'dialect' in kwargs:
+            self.dialect = kwargs.pop('dialect')
         self.link = self.get_link(link_id)
 
         # Check for any found data and initialise it.
@@ -60,11 +61,11 @@ class DataStore(HasTraits):
             self._format_loaded_data()
         # Save new entries.
         else:
-            self._save_state()
+            self._conditional_save_state()
 
     # Intercept trait calls.
     def __getattr__(self, name):
-        if name in self._datastore_atts:
+        if name in self._datastore_map:
             print('rerouting')
             return getattr(self, f'{name}_trait').val
         else:
@@ -73,7 +74,7 @@ class DataStore(HasTraits):
             raise AttributeError(name)
 
     def __setattr__(self, attr, value):
-        if attr in self._datastore_atts:
+        if attr in self._datastore_map:
             self.__dict__[f'{attr}_trait'].val = value
         else:
             self.__dict__[attr] = value
@@ -83,6 +84,7 @@ class DataStore(HasTraits):
         if self.lookup == 'uuid':  # Only uuid supported at present.
             return datalink.links.UUIDLookup(table_name=self.table_name,
                                              db_path=self.db_path,
+                                             dialect=self.dialect,
                                              link_id=link_id)
         else:
             raise ValueError(self.lookup)
@@ -90,15 +92,20 @@ class DataStore(HasTraits):
     # Properties for interfacing with the link to save, and to handle
     # translation between SQL friendly data and the python objects in
     # the data store.
-    def _save_state(self):
+    def _conditional_save_state(self):
+        """Push an update to the db only if the _save_flag is true."""
         if self._save_flag:
             self.link.save(self._sql_friendly_data)
 
+    def save(self):
+        """Method to force a save."""
+        self.link.save(self._sql_friendly_data)
+
     @property
     def data(self):
-        d = {k: v for k, v in zip(self._datastore_atts,
+        d = {k: v for k, v in zip(self._datastore_map,
                                  [getattr(self, f'{attr}_trait').val
-                                  for attr in self._datastore_atts])}
+                                  for attr in self._datastore_map])}
         d['id'] = self.id
         return d
 
@@ -141,7 +148,7 @@ class DataStore(HasTraits):
 
     # Properties for accessing and updating the data store.
     @property
-    def is_loaded_from_db(self):
+    def is_loaded(self):
         if self.link.loaded_data:
             return True
         else:
