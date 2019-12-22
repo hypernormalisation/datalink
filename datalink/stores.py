@@ -3,7 +3,7 @@ import ast
 import collections.abc
 import datalink.links
 import logging
-from datalink.utils import GenericEntry
+from datalink.utils import GenericEntry, ListEntry
 from traits.api import HasTraits
 
 log = logging.getLogger(__name__)
@@ -36,7 +36,10 @@ class DataStore(HasTraits):
         # Set the traits
         for attr, value in instance_map.items():
             trait = f'{attr}_trait'
-            setattr(self, trait, GenericEntry(value))
+            if isinstance(value, collections.abc.Iterable) and not isinstance(value, str):
+                setattr(self, trait, ListEntry(value))
+            else:
+                setattr(self, trait, GenericEntry(value))
 
             # # print(attr, trait, value)
             # for my_type, container in trait_assignment_dict.items():
@@ -70,7 +73,6 @@ class DataStore(HasTraits):
     # Intercept trait calls.
     def __getattr__(self, name):
         if name in self._datastore_map:
-            print('rerouting')
             return getattr(self, f'{name}_trait').val
         else:
             raise AttributeError(name)
