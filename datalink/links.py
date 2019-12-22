@@ -1,7 +1,6 @@
 import abc
 import dataset
 import logging
-import os
 import uuid
 import sqlalchemy
 import sqlalchemy_utils
@@ -80,11 +79,6 @@ class SQLInterface:
     @abc.abstractmethod
     def id(self):
         pass
-
-    # @property
-    # def sql_load_query(self):
-    #     """Abstract property for sql query to be used in loading."""
-    #     return f'SELECT * FROM {self.table_name} WHERE id=\'{self.id}\''
 
     @property
     def is_id_saved(self):

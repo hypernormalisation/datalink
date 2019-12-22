@@ -7,6 +7,7 @@ __version__ = '0.0.1'
 __email__ = 'sogilvy@protonmail.com'
 
 import logging
+import types
 import collections.abc
 import datalink.links as dllinks
 import datalink.stores as dlstores
@@ -34,12 +35,11 @@ def link_factory(
     if not data_fields and not isinstance(data_fields, collections.abc.Mapping):
         raise ValueError('data_fields must be a valid mapping.')
 
-    class NewClass(dlstores.DataStore):
-        pass
-    NewClass.__name__ = name
-    NewClass.db_path = db_path
-    NewClass.table_name = table_name
-    NewClass._datastore_map = data_fields
-    NewClass.lookup = lookup
-    NewClass.dialect = dialect
-    return NewClass
+    new_class = types.new_class(name, bases=(dlstores.DataStore, ))
+    new_class.__name__ = name
+    new_class.db_path = db_path
+    new_class.table_name = table_name
+    new_class._datastore_map = data_fields
+    new_class.lookup = lookup
+    new_class.dialect = dialect
+    return new_class

@@ -3,7 +3,7 @@ import ast
 import collections.abc
 import datalink.links
 import logging
-from datalink.utils import trait_assignment_dict
+from datalink.utils import GenericEntry
 from traits.api import HasTraits
 
 log = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ class DataStore(HasTraits):
     def __init__(self, *args, **kwargs):
 
         if args and not len(args) == 1:
-            raise ValueError('Only takes 0 or 1 positional arguments.')
+            raise ValueError('Only takes K0 or 1 positional arguments.')
 
         # Intercept user defined values
         instance_map = copy.deepcopy(self._datastore_map)
@@ -36,13 +36,17 @@ class DataStore(HasTraits):
         # Set the traits
         for attr, value in instance_map.items():
             trait = f'{attr}_trait'
-            # print(attr, trait, value)
-            for my_type, container in trait_assignment_dict.items():
-                if isinstance(value, my_type):
-                    setattr(self, trait, container(value))
-                    break
-            else:
-                print('No matching type!')
+            setattr(self, trait, GenericEntry(value))
+
+            # # print(attr, trait, value)
+            # for my_type, container in trait_assignment_dict.items():
+            #     setattr(self, trait, GenericEntry(value))  # container(value))
+            #     break
+            #     # if isinstance(value, my_type):
+            #     #     setattr(self, trait, GenericEntry(value))  #  container(value))
+            #     #     break
+            # else:
+            #     print('No matching type!')
             getattr(self, trait).on_trait_change(self._conditional_save_state, 'val[]')
 
         # Flags for internal operation.
@@ -69,8 +73,6 @@ class DataStore(HasTraits):
             print('rerouting')
             return getattr(self, f'{name}_trait').val
         else:
-            print(name)
-            print(self.__dict__)
             raise AttributeError(name)
 
     def __setattr__(self, attr, value):
@@ -78,6 +80,9 @@ class DataStore(HasTraits):
             self.__dict__[f'{attr}_trait'].val = value
         else:
             self.__dict__[attr] = value
+
+    def __str__(self):
+        return str(self.data)
 
     def get_link(self, link_id):
         """Factory method to construct the link."""
@@ -104,8 +109,8 @@ class DataStore(HasTraits):
     @property
     def data(self):
         d = {k: v for k, v in zip(self._datastore_map,
-                                 [getattr(self, f'{attr}_trait').val
-                                  for attr in self._datastore_map])}
+                                  [getattr(self, f'{attr}_trait').val
+                                   for attr in self._datastore_map])}
         d['id'] = self.id
         return d
 
