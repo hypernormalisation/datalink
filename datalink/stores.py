@@ -187,7 +187,7 @@ class DataStore(HasTraits):
         """
         self._save_flag = False
         for k in kwargs:
-            if k not in self.data:
+            if k not in self._data:
                 raise KeyError(f'update received a non data store parameter: {k}')
         for i, (k, v) in enumerate(kwargs.items()):
             if i == len(kwargs) - 1:

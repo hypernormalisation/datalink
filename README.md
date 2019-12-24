@@ -41,7 +41,7 @@ logging.getLogger('datalink').propagate = False
 ### Creating user datalink classes
 
 The `factory` method is used to create new classes that the user can utilise,
-in a similar fashion to `namedtuple` classes from the `collections` module.
+in a similar fashion to `namedtuple`-based classes from the `collections` module.
 
 Some required arguments are:
 - `name`: the new class's name
@@ -82,7 +82,7 @@ o = Order()
 ```
 
     INFO | sqlite db created at path: /tmp/my_ledger.db
-    DEBUG | Creating new database entry with id de39809c-0c3d-4579-b41b-1d4f510d21eb.
+    DEBUG | Creating new database entry with id 4256c6e9-6979-47e7-b483-12d744c4de78.
 
 
 As this is the first `Order` instance we have created, the associated database is created.
@@ -101,13 +101,24 @@ o.cost += 11.50
 ```
 
     None None 0.0 []
-    DEBUG | Updating existing database entry for id de39809c-0c3d-4579-b41b-1d4f510d21eb.
-    DEBUG | Updating existing database entry for id de39809c-0c3d-4579-b41b-1d4f510d21eb.
-    DEBUG | Updating existing database entry for id de39809c-0c3d-4579-b41b-1d4f510d21eb.
-    DEBUG | Updating existing database entry for id de39809c-0c3d-4579-b41b-1d4f510d21eb.
+    DEBUG | Updating existing database entry for id 4256c6e9-6979-47e7-b483-12d744c4de78.
+    DEBUG | Updating existing database entry for id 4256c6e9-6979-47e7-b483-12d744c4de78.
+    DEBUG | Updating existing database entry for id 4256c6e9-6979-47e7-b483-12d744c4de78.
+    DEBUG | Updating existing database entry for id 4256c6e9-6979-47e7-b483-12d744c4de78.
 
 
 As soon as the assignent is made to the `Order` instance's data-store attributes, the appropriate database entry is updated.
+
+The `update` method can be used with keywords to update multiple entries at once, with only 
+a single write operation to the database.
+
+
+```python
+o.update(shipping_address='123 Leaf Way, Sometown', client_name='Alice C Smith')
+```
+
+    DEBUG | Updating existing database entry for id 4256c6e9-6979-47e7-b483-12d744c4de78.
+
 
 A dictionary containing all data-store variables is exposed through the read-only `data` property. 
 
@@ -119,11 +130,11 @@ o.data
 
 
 
-    {'client_name': 'Alice Smith',
-     'shipping_address': '123 Leaf Avenue, Sometown',
+    {'client_name': 'Alice C Smith',
+     'shipping_address': '123 Leaf Way, Sometown',
      'items': ['bracket'],
      'cost': 11.5,
-     'id': 'de39809c-0c3d-4579-b41b-1d4f510d21eb'}
+     'id': '4256c6e9-6979-47e7-b483-12d744c4de78'}
 
 
 
@@ -137,7 +148,7 @@ o2 = Order(client_name='Beatrice Smith', address='456 Rock Drive, Someothertown'
 o2.data
 ```
 
-    DEBUG | Creating new database entry with id 313f2881-a1bc-4f86-b4d5-baf0c695c53b.
+    DEBUG | Creating new database entry with id dac2db7a-a275-440a-8137-1c8808949ed7.
 
 
 
@@ -147,7 +158,7 @@ o2.data
      'shipping_address': None,
      'items': ['paint_black', 'small_brush'],
      'cost': 22.4,
-     'id': '313f2881-a1bc-4f86-b4d5-baf0c695c53b'}
+     'id': 'dac2db7a-a275-440a-8137-1c8808949ed7'}
 
 
 
@@ -161,8 +172,8 @@ print(o2.id)
 o3 = Order(o2.id)
 ```
 
-    313f2881-a1bc-4f86-b4d5-baf0c695c53b
-    DEBUG | Loading data corresponding to ID: 313f2881-a1bc-4f86-b4d5-baf0c695c53b
+    dac2db7a-a275-440a-8137-1c8808949ed7
+    DEBUG | Loading data corresponding to ID: dac2db7a-a275-440a-8137-1c8808949ed7
 
 
 
@@ -177,7 +188,7 @@ o3.data
      'shipping_address': None,
      'items': ['paint_black', 'small_brush'],
      'cost': 22.4,
-     'id': '313f2881-a1bc-4f86-b4d5-baf0c695c53b'}
+     'id': 'dac2db7a-a275-440a-8137-1c8808949ed7'}
 
 
 
@@ -189,14 +200,14 @@ Order(o3.id, cost=30.0)
 o3.data
 ```
 
-    DEBUG | Loading data corresponding to ID: 313f2881-a1bc-4f86-b4d5-baf0c695c53b
-    DEBUG | Updating existing database entry for id 313f2881-a1bc-4f86-b4d5-baf0c695c53b.
+    DEBUG | Loading data corresponding to ID: dac2db7a-a275-440a-8137-1c8808949ed7
+    DEBUG | Updating existing database entry for id dac2db7a-a275-440a-8137-1c8808949ed7.
 
 
 
 
 
-    <traits.has_traits.Order at 0x7f763000bf50>
+    <traits.has_traits.Order at 0x7f86cba5d110>
 
 
 
@@ -207,7 +218,7 @@ o3.data
      'shipping_address': None,
      'items': ['paint_black', 'small_brush'],
      'cost': 30.0,
-     'id': '313f2881-a1bc-4f86-b4d5-baf0c695c53b'}
+     'id': 'dac2db7a-a275-440a-8137-1c8808949ed7'}
 
 
 
@@ -222,8 +233,8 @@ print(o2.data) # data exposed here is guaranteed to be up-to-date.
 print(o2.items)  # data exposed here is guaranteed to be up-to-date.
 ```
 
-    DEBUG | Updating existing database entry for id 313f2881-a1bc-4f86-b4d5-baf0c695c53b.
-    {'client_name': 'Beatrice Smith', 'shipping_address': None, 'items': ['paint_black', 'small_brush', 'paint_red'], 'cost': 30.0, 'id': '313f2881-a1bc-4f86-b4d5-baf0c695c53b'}
+    DEBUG | Updating existing database entry for id dac2db7a-a275-440a-8137-1c8808949ed7.
+    {'client_name': 'Beatrice Smith', 'shipping_address': None, 'items': ['paint_black', 'small_brush', 'paint_red'], 'cost': 30.0, 'id': 'dac2db7a-a275-440a-8137-1c8808949ed7'}
     ['paint_black', 'small_brush', 'paint_red']
 
 
@@ -289,7 +300,7 @@ run_efficiency()
 
 
 
-    0.1535121152133884
+    0.0012810827265243262
 
 
 
@@ -310,6 +321,6 @@ run_efficiency()
 
 
 
-    0.1535121152133884
+    0.0012810827265243262
 
 
