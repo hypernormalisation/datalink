@@ -17,6 +17,7 @@ class DataStore(HasTraits):
     _datastore_map = {}  # populated in manufactured classes
     lookup = None
     dialect = None
+    bidirectional = True
 
     def __init__(self, *args, **kwargs):
 
@@ -25,13 +26,13 @@ class DataStore(HasTraits):
 
         # Intercept user defined values
         instance_map = copy.deepcopy(self._datastore_map)
-        d = {}
+        datastore_arg_dict = {}
         for k, v in kwargs.items():
             if k in instance_map:
-                d[k] = v
-        for k in d:
+                datastore_arg_dict[k] = v
+        for k in datastore_arg_dict:
             kwargs.pop(k)
-        instance_map.update(d)
+        instance_map.update(datastore_arg_dict)
 
         # Set the traits
         for attr, value in instance_map.items():
@@ -40,16 +41,6 @@ class DataStore(HasTraits):
                 setattr(self, trait, ListEntry(value))
             else:
                 setattr(self, trait, GenericEntry(value))
-
-            # # print(attr, trait, value)
-            # for my_type, container in trait_assignment_dict.items():
-            #     setattr(self, trait, GenericEntry(value))  # container(value))
-            #     break
-            #     # if isinstance(value, my_type):
-            #     #     setattr(self, trait, GenericEntry(value))  #  container(value))
-            #     #     break
-            # else:
-            #     print('No matching type!')
             getattr(self, trait).on_trait_change(self._conditional_save_state, 'val[]')
 
         # Flags for internal operation.
@@ -66,13 +57,20 @@ class DataStore(HasTraits):
         # Check for any found data and initialise it.
         if self.link.loaded_data:
             self._format_loaded_data()
+            # If the user passed args, update the entry.
+            if datastore_arg_dict:
+                self.update(**datastore_arg_dict)
+
         # Save new entries.
         else:
             self._conditional_save_state()
 
     # Intercept trait calls.
     def __getattr__(self, name):
+        # Update from SQL entry.
         if name in self._datastore_map:
+            if self.bidirectional:
+                self._force_load()
             return getattr(self, f'{name}_trait').val
         else:
             raise AttributeError(name)
@@ -83,9 +81,12 @@ class DataStore(HasTraits):
         else:
             self.__dict__[attr] = value
 
-    def __str__(self):
-        return str(self.data)
+    # def __str__(self):
+    #     return str(self._data)
 
+    # Properties for interfacing with the link to save, and to handle
+    # translation between SQL friendly data and the python objects in
+    # the data store.
     def get_link(self, link_id):
         """Factory method to construct the link."""
         if self.lookup == 'uuid':  # Only uuid supported at present.
@@ -96,9 +97,10 @@ class DataStore(HasTraits):
         else:
             raise ValueError(self.lookup)
 
-    # Properties for interfacing with the link to save, and to handle
-    # translation between SQL friendly data and the python objects in
-    # the data store.
+    def _force_load(self):
+        self.link.loaded_data = self.link.load()
+        self._format_loaded_data()
+
     def _conditional_save_state(self):
         """Push an update to the db only if the _save_flag is true."""
         if self._save_flag:
@@ -110,6 +112,13 @@ class DataStore(HasTraits):
 
     @property
     def data(self):
+        """Property exposing the most up-to-date version of the data."""
+        self._force_load()
+        return self._data
+
+    @property
+    def _data(self):
+        """For use internally."""
         d = {k: v for k, v in zip(self._datastore_map,
                                   [getattr(self, f'{attr}_trait').val
                                    for attr in self._datastore_map])}
@@ -122,7 +131,7 @@ class DataStore(HasTraits):
         Property to return a version of the data store
         with data types supported by SQL.
         """
-        d = copy.deepcopy(self.data)
+        d = copy.deepcopy(self._data)
         for key, val in d.items():
             if isinstance(val, collections.abc.Sequence) and not isinstance(val, str):
                 try:
@@ -160,6 +169,13 @@ class DataStore(HasTraits):
             return True
         else:
             return False
+
+    @property
+    def is_new(self):
+        if self.link.loaded_data:
+            return False
+        else:
+            return True
 
     @property
     def id(self):

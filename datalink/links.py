@@ -69,9 +69,9 @@ class SQLInterface:
         if not sqlalchemy_utils.database_exists(self.db_path_protocol):
             try:
                 s = sqlalchemy_utils.create_database(self.db_path_protocol)
-                log.info('- db created at path: {}'.format(self.db_path))
+                log.info(f'{self.dialect} db created at path: {self.db_path}')
             except sqlalchemy.exc.SQLAlchemyError as e:
-                log.error('- failed to create db at path: {}'.format(self.db_path))
+                log.error(f'failed to create {self.dialect} db at path: {self.db_path}')
                 log.error(e)
                 raise
 

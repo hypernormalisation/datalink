@@ -18,13 +18,13 @@ log = logging.getLogger(__name__)
 
 
 def test_output():
-    log.info('logging from datalink')
+    log.info('Test logging output from datalink.')
 
 
-def link_factory(
+def factory(
         name=None, db_path=None,
         table_name=None, data_fields=None, lookup='uuid',
-        dialect='sqlite',
+        dialect='sqlite', bidirectional=True
         ):
     """
     Factory function to produce a new class derived from DataStore.
@@ -42,4 +42,5 @@ def link_factory(
     new_class._datastore_map = data_fields
     new_class.lookup = lookup
     new_class.dialect = dialect
+    new_class.bidirectional = bidirectional
     return new_class

@@ -1,4 +1,4 @@
-from traits.api import Int, Float, Str, List, HasTraits, Tuple, Generic
+from traits.api import Int, Float, Str, List, HasTraits, Tuple, Generic, Dict
 
 
 class GenericEntry(HasTraits):
