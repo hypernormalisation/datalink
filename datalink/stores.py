@@ -14,7 +14,7 @@ class DataStore(HasTraits):
     db_path = None
     table_name = None
     _data_fields = {}
-    _datastore_map = {}  # populated in manufactured classes
+    _datastore_map = {}
     lookup = None
     dialect = None
     bidirectional = True
@@ -81,8 +81,10 @@ class DataStore(HasTraits):
         else:
             self.__dict__[attr] = value
 
-    # def __str__(self):
-    #     return str(self._data)
+    def __bool__(self):
+        if self.is_new:
+            return False
+        return True
 
     # Properties for interfacing with the link to save, and to handle
     # translation between SQL friendly data and the python objects in

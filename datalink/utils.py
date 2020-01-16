@@ -14,6 +14,12 @@ class ListEntry(HasTraits):
         self.val = v
 
 
+class DictEntry(HasTraits):
+    val = Dict()
+    def __init__(self, v):
+        self.val = v
+
+
 # class IntEntry(HasTraits):
 #     val = Int(0)
 #     def __init__(self, v):
