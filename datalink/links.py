@@ -35,7 +35,7 @@ class SQLInterface:
 
     @property
     def url(self):
-        return str(self._url)
+        return self._url
 
     @property
     def engine(self):

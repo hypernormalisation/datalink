@@ -18,26 +18,3 @@ class DictEntry(HasTraits):
     val = Dict()
     def __init__(self, v):
         self.val = v
-
-
-# class IntEntry(HasTraits):
-#     val = Int(0)
-#     def __init__(self, v):
-#         self.val = v
-#
-#
-# class FloatEntry(HasTraits):
-#     val = Float(0.0)
-#     def __init__(self, v):
-#         self.val = v
-#
-#
-# class StringEntry(HasTraits):
-#     val = Str('')
-#     def __init__(self, v):
-#         self.val = v
-#
-#
-# class TupleEntry(HasTraits):
-#     val = Tuple()
-#     def __init__(self, v):

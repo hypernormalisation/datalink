@@ -22,31 +22,32 @@ def test_output():
     log.info('Test logging output from datalink.')
 
 
-def format_url(
-        database=None, dialect='sqlite',
-        username=None, password=None, host=None, port=None,
-        ):
-    """Function to create a URL from the config to be used in sqlalchemy."""
-
-    if 'sqlite' in dialect:
-        return sqlalchemy.engine.url.URL(dialect, database=database)
-
-    if 'postgres' in dialect:
-        if password:
-            return sqlalchemy.engine.url.URL(
-                dialect, database=database, host=host, username=username, password=password
-            )
-        else:
-            return sqlalchemy.engine.url.URL(
-                dialect, database=database, host=host, username=username,
-            )
-
+# def format_url(
+#         database=None, dialect='sqlite',
+#         username=None, password=None, host=None, port=None,
+#         ):
+#     """Function to create a URL from the config to be used in sqlalchemy."""
+#
+#     if 'sqlite' in dialect:
+#         return sqlalchemy.engine.url.URL(dialect, database=database)
+#
+#     if 'postgres' in dialect:
+#         if password:
+#             return sqlalchemy.engine.url.URL(
+#                 dialect, database=database, host=host, username=username, password=password
+#             )
+#         else:
+#             return sqlalchemy.engine.url.URL(
+#                 dialect, database=database, host=host, username=username,
+#             )
+#
 
 def factory(
         name, table, fields,
         url=None,
-        database=None, dialect='sqlite',
-        username=None, password=None, host=None, port=None,
+        database=None,
+        # dialect='sqlite',
+        # username=None, password=None, host=None, port=None,
         lookup='uuid', bidirectional=True,
         ):
     """
@@ -61,19 +62,19 @@ def factory(
 
     # If url not supplied, use the config to construct a database URL.
     if not url:
-        url = format_url(
-            database=database, dialect=dialect, username=username,
-            password=password, host=host, port=port
-        )
+        url = sqlalchemy.engine.url.URL(dialect, database=database)
+        # url = format_url(
+        #     database=database, dialect=dialect, username=username,
+        #     password=password, host=host, port=port
+        # )
 
     new_class = types.new_class(name, bases=(dlstores.DataStore, ))
     new_class.__name__ = name
 
-    new_class._url = url
-    new_class._table = table
+    new_class.url = str(url)
+    new_class.table = table
     new_class._fields = fields
 
     new_class._lookup = lookup
-    new_class._dialect = dialect
     new_class._bidirectional = bidirectional
     return new_class

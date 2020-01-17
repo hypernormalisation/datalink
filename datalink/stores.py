@@ -12,11 +12,10 @@ log = logging.getLogger(__name__)
 
 class DataStore(HasTraits):
     """Class for a basic mapping data store."""
-    _url = None
-    _table = None
+    url = None
+    table = None
     _fields = {}
     _lookup = None
-    _dialect = None
     _bidirectional = True
 
     def __init__(self, *args, **kwargs):
@@ -50,8 +49,8 @@ class DataStore(HasTraits):
         link_id = None
         if args:
             link_id = args[0]
-        if 'dialect' in kwargs:
-            self._dialect = kwargs.pop('dialect')
+        # if 'dialect' in kwargs:
+        #     self._dialect = kwargs.pop('dialect')
         self.link = self._get_link(link_id)
 
         # Check for any found data and initialise it.
@@ -92,8 +91,8 @@ class DataStore(HasTraits):
     def _get_link(self, link_id):
         """Factory method to construct the link."""
         if self._lookup == 'uuid':  # Only uuid supported at present.
-            return datalink.links.UUIDLookup(table_name=self._table,
-                                             url=self._url,
+            return datalink.links.UUIDLookup(table_name=self.table,
+                                             url=self.url,
                                              link_id=link_id)
         else:
             raise ValueError(self._lookup)
@@ -165,10 +164,6 @@ class DataStore(HasTraits):
     @property
     def id(self):
         return self.link.id
-
-    @property
-    def url(self):
-        return self.link.url
 
     def update(self, **kwargs):
         """
