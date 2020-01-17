@@ -6,18 +6,18 @@ import logging
 from datalink.utils import GenericEntry, ListEntry
 from traits.api import HasTraits
 
+
 log = logging.getLogger(__name__)
 
 
 class DataStore(HasTraits):
     """Class for a basic mapping data store."""
-    db_path = None
-    table_name = None
-    _data_fields = {}
-    _datastore_map = {}
-    lookup = None
-    dialect = None
-    bidirectional = True
+    _url = None
+    _table = None
+    _fields = {}
+    _lookup = None
+    _dialect = None
+    _bidirectional = True
 
     def __init__(self, *args, **kwargs):
 
@@ -25,7 +25,7 @@ class DataStore(HasTraits):
             raise ValueError('Only takes K0 or 1 positional arguments.')
 
         # Intercept user defined values
-        instance_map = copy.deepcopy(self._datastore_map)
+        instance_map = copy.deepcopy(self._fields)
         datastore_arg_dict = {}
         for k, v in kwargs.items():
             if k in instance_map:
@@ -51,8 +51,8 @@ class DataStore(HasTraits):
         if args:
             link_id = args[0]
         if 'dialect' in kwargs:
-            self.dialect = kwargs.pop('dialect')
-        self.link = self.get_link(link_id)
+            self._dialect = kwargs.pop('dialect')
+        self.link = self._get_link(link_id)
 
         # Check for any found data and initialise it.
         if self.link.loaded_data:
@@ -65,39 +65,38 @@ class DataStore(HasTraits):
         else:
             self._conditional_save_state()
 
-    # Intercept trait calls.
     def __getattr__(self, name):
-        # Update from SQL entry.
-        if name in self._datastore_map:
-            if self.bidirectional:
+        """Intercept traits."""
+        if name in self._fields:
+            if self._bidirectional:
                 self._force_load()
             return getattr(self, f'{name}_trait').val
         else:
             raise AttributeError(name)
 
     def __setattr__(self, attr, value):
-        if attr in self._datastore_map:
+        if attr in self._fields:
             self.__dict__[f'{attr}_trait'].val = value
         else:
             self.__dict__[attr] = value
 
     def __bool__(self):
-        if self.is_new:
-            return False
-        return True
+        """Return true if data for the id was found in the database."""
+        if self.link.loaded_data:
+            return True
+        return False
 
     # Properties for interfacing with the link to save, and to handle
     # translation between SQL friendly data and the python objects in
     # the data store.
-    def get_link(self, link_id):
+    def _get_link(self, link_id):
         """Factory method to construct the link."""
-        if self.lookup == 'uuid':  # Only uuid supported at present.
-            return datalink.links.UUIDLookup(table_name=self.table_name,
-                                             db_path=self.db_path,
-                                             dialect=self.dialect,
+        if self._lookup == 'uuid':  # Only uuid supported at present.
+            return datalink.links.UUIDLookup(table_name=self._table,
+                                             url=self._url,
                                              link_id=link_id)
         else:
-            raise ValueError(self.lookup)
+            raise ValueError(self._lookup)
 
     def _force_load(self):
         self.link.loaded_data = self.link.load()
@@ -120,10 +119,9 @@ class DataStore(HasTraits):
 
     @property
     def _data(self):
-        """For use internally."""
-        d = {k: v for k, v in zip(self._datastore_map,
+        d = {k: v for k, v in zip(self._fields,
                                   [getattr(self, f'{attr}_trait').val
-                                   for attr in self._datastore_map])}
+                                   for attr in self._fields])}
         d['id'] = self.id
         return d
 
@@ -131,7 +129,7 @@ class DataStore(HasTraits):
     def _sql_friendly_data(self):
         """
         Property to return a version of the data store
-        with data types supported by SQL.
+        with data types supported by SQL backends.
         """
         d = copy.deepcopy(self._data)
         for key, val in d.items():
@@ -164,24 +162,13 @@ class DataStore(HasTraits):
             setattr(self, k, v)
         self._save_flag = True
 
-    # Properties for accessing and updating the data store.
-    @property
-    def is_loaded(self):
-        if self.link.loaded_data:
-            return True
-        else:
-            return False
-
-    @property
-    def is_new(self):
-        if self.link.loaded_data:
-            return False
-        else:
-            return True
-
     @property
     def id(self):
         return self.link.id
+
+    @property
+    def url(self):
+        return self.link.url
 
     def update(self, **kwargs):
         """

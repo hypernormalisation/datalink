@@ -61,6 +61,7 @@ Immutable types can be defaulted, and changed, to any value specified, including
 
 ```python
 ```python
+```python
 my_order_fields ={
     'client_name': None,
     'shipping_address': None, 
@@ -68,7 +69,7 @@ my_order_fields ={
     'cost': 0.0
     }
 
-Order = datalink.factory(name='Order', db_path='/tmp/my_ledger.db',
+Order = datalink.factory(name='Order', database='/tmp/my_ledger.db',
                          table_name='Orders',
                          fields=my_order_fields)
 ```
@@ -261,9 +262,10 @@ This allows for user-specified ids to be used to e.g. record data/metadata with 
 
 ```python
 ```python
+```python
 particle_defaults = {'charge': None, 'efficiency': None}
 Particle = datalink.factory(name='Particle', table_name='particles',
-                            db_path='/tmp/particles.db', fields=particle_defaults)
+                            database='/tmp/particles.db', fields=particle_defaults)
 
 def run_efficiency():
     d = {}

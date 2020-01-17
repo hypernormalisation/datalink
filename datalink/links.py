@@ -10,25 +10,19 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 
-dialect_map = {
-    'sqlite': 'sqlite:///{}'
-}
-
-
 class SQLInterface:
     """Class to handle all interactions with SQL databases."""
 
-    def __init__(self, db_path=None, table_name='data',
-                 link_id=None, dialect='sqlite', **kwargs):
-        if not db_path:
-            raise ValueError('db_path is a required field')
-        self._db_path = db_path
-        self._table_name = table_name
+    def __init__(self, table_name='data', url=None,
+                 link_id=None, **kwargs):
+        # self._db_path = db_path
+        self._table = table_name
         self._id = link_id
-        self.dialect = dialect
+        self._url = url
         self.loaded_data = None
 
         self.ensure_database()
+
         try:
             self._lookup_dict = kwargs['lookup']
         except KeyError:
@@ -40,38 +34,32 @@ class SQLInterface:
             self.loaded_data = self.load()
 
     @property
-    def db_path(self):
-        """Abstract property for the db location. Implement in derived classes."""
-        return Path(self._db_path).expanduser()
-
-    @property
-    def db_path_protocol(self):
-        pattern = dialect_map[self.dialect]
-        return pattern.format(self.db_path)
+    def url(self):
+        return str(self._url)
 
     @property
     def engine(self):
-        return sqlalchemy.create_engine(self.db_path_protocol)
+        return sqlalchemy.create_engine(self.url)
 
     @property
     def does_table_exist(self):
-        with dataset.connect(self.db_path_protocol) as db:
-            if self.table_name in db.tables:
+        with dataset.connect(self.url) as db:
+            if self.table in db.tables:
                 return True
         return False
 
     @property
-    def table_name(self):
-        return self._table_name
+    def table(self):
+        return self._table
 
     def ensure_database(self):
         """Ensure the database for the type of data exists."""
-        if not sqlalchemy_utils.database_exists(self.db_path_protocol):
+        if not sqlalchemy_utils.database_exists(self.url):
             try:
-                s = sqlalchemy_utils.create_database(self.db_path_protocol)
-                log.info(f'{self.dialect} db created at path: {self.db_path}')
+                s = sqlalchemy_utils.create_database(self.url)
+                log.info(f'db created at: {self.url}')
             except sqlalchemy.exc.SQLAlchemyError as e:
-                log.error(f'failed to create {self.dialect} db at path: {self.db_path}')
+                log.error(f'failed to create db at: {self.url}')
                 log.error(e)
                 raise
 
@@ -88,8 +76,8 @@ class SQLInterface:
         """
         if self.does_table_exist:
             try:
-                with dataset.connect(self.db_path_protocol) as db:
-                    t = db[self.table_name]
+                with dataset.connect(self.url) as db:
+                    t = db[self.table]
                     result = t.find(id=str(self.id))
                     if list(result):
                         # log.debug(f'Found id {self.id}')
@@ -100,25 +88,25 @@ class SQLInterface:
 
     def load(self):
         """Method to attempt a load from the relevant table."""
-        with dataset.connect(self.db_path_protocol) as db:
-            t = db[self.table_name]
+        with dataset.connect(self.url) as db:
+            t = db[self.table]
             result = t.find(id=str(self.id))
             return result
 
     def save(self, data):
         """Method to save or update the relevant entry in the table."""
         if not self.is_id_saved:
-            with dataset.connect(self.db_path_protocol) as db:
+            with dataset.connect(self.url) as db:
                 log.debug(f'Creating new database entry with id {self.id}.')
-                if self.table_name in db.tables:
-                    t = db[self.table_name]
+                if self.table in db.tables:
+                    t = db[self.table]
                 else:
-                    t = db.create_table(self.table_name, primary_id=False)
+                    t = db.create_table(self.table, primary_id=False)
                 t.insert(data)
         else:
-            with dataset.connect(self.db_path_protocol) as db:
+            with dataset.connect(self.url) as db:
                 log.debug(f'Updating existing database entry for id {self.id}.')
-                t = db[self.table_name]
+                t = db[self.table]
                 t.update(data, ['id'])
 
 

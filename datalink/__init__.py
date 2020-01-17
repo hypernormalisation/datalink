@@ -7,6 +7,7 @@ __version__ = '0.0.1'
 __email__ = 'sogilvy@protonmail.com'
 
 import logging
+import sqlalchemy
 import types
 import collections.abc
 import datalink.links as dllinks
@@ -21,26 +22,58 @@ def test_output():
     log.info('Test logging output from datalink.')
 
 
+def format_url(
+        database=None, dialect='sqlite',
+        username=None, password=None, host=None, port=None,
+        ):
+    """Function to create a URL from the config to be used in sqlalchemy."""
+
+    if 'sqlite' in dialect:
+        return sqlalchemy.engine.url.URL(dialect, database=database)
+
+    if 'postgres' in dialect:
+        if password:
+            return sqlalchemy.engine.url.URL(
+                dialect, database=database, host=host, username=username, password=password
+            )
+        else:
+            return sqlalchemy.engine.url.URL(
+                dialect, database=database, host=host, username=username,
+            )
+
+
 def factory(
-        name=None, db_path=None,
-        table_name=None, fields=None, lookup='uuid',
-        dialect='sqlite', bidirectional=True
+        name, table, fields,
+        url=None,
+        database=None, dialect='sqlite',
+        username=None, password=None, host=None, port=None,
+        lookup='uuid', bidirectional=True,
         ):
     """
     Factory function to produce a new class derived from DataStore.
     """
-    for arg in [name, db_path, table_name]:
+    # Check args and kwargs
+    for arg in [name, fields, table]:
         if not arg:
-            raise ValueError(f'{arg} is a required field.')
-    if not fields and not isinstance(fields, collections.abc.Mapping):
-        raise ValueError('data_fields must be a valid mapping.')
+            raise ValueError(f'{arg} is a required positional field.')
+    if not isinstance(fields, collections.abc.Mapping):
+        raise ValueError('fields must be a valid mapping.')
+
+    # If url not supplied, use the config to construct a database URL.
+    if not url:
+        url = format_url(
+            database=database, dialect=dialect, username=username,
+            password=password, host=host, port=port
+        )
 
     new_class = types.new_class(name, bases=(dlstores.DataStore, ))
     new_class.__name__ = name
-    new_class.db_path = db_path
-    new_class.table_name = table_name
-    new_class._datastore_map = fields
-    new_class.lookup = lookup
-    new_class.dialect = dialect
-    new_class.bidirectional = bidirectional
+
+    new_class._url = url
+    new_class._table = table
+    new_class._fields = fields
+
+    new_class._lookup = lookup
+    new_class._dialect = dialect
+    new_class._bidirectional = bidirectional
     return new_class

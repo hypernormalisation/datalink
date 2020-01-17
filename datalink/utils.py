@@ -41,12 +41,3 @@ class DictEntry(HasTraits):
 # class TupleEntry(HasTraits):
 #     val = Tuple()
 #     def __init__(self, v):
-#         self.val = v
-#
-# trait_assignment_dict = {
-#     int: IntEntry,
-#     float: FloatEntry,
-#     list: ListEntry,
-#     str: StringEntry,
-#     tuple: TupleEntry,
-# }
