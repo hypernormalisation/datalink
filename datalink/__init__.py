@@ -22,32 +22,10 @@ def test_output():
     log.info('Test logging output from datalink.')
 
 
-# def format_url(
-#         database=None, dialect='sqlite',
-#         username=None, password=None, host=None, port=None,
-#         ):
-#     """Function to create a URL from the config to be used in sqlalchemy."""
-#
-#     if 'sqlite' in dialect:
-#         return sqlalchemy.engine.url.URL(dialect, database=database)
-#
-#     if 'postgres' in dialect:
-#         if password:
-#             return sqlalchemy.engine.url.URL(
-#                 dialect, database=database, host=host, username=username, password=password
-#             )
-#         else:
-#             return sqlalchemy.engine.url.URL(
-#                 dialect, database=database, host=host, username=username,
-#             )
-#
-
 def factory(
         name, table, fields,
         url=None,
         database=None,
-        # dialect='sqlite',
-        # username=None, password=None, host=None, port=None,
         lookup='uuid', bidirectional=True,
         ):
     """
@@ -60,13 +38,10 @@ def factory(
     if not isinstance(fields, collections.abc.Mapping):
         raise ValueError('fields must be a valid mapping.')
 
-    # If url not supplied, use the config to construct a database URL.
+    # If url not supplied, assume sqlite and use database as file path
+    # to construct an sqlite URL using the default sqlalchemy driver.
     if not url:
-        url = sqlalchemy.engine.url.URL(dialect, database=database)
-        # url = format_url(
-        #     database=database, dialect=dialect, username=username,
-        #     password=password, host=host, port=port
-        # )
+        url = sqlalchemy.engine.url.URL('sqlite', database=database)
 
     new_class = types.new_class(name, bases=(dlstores.DataStore, ))
     new_class.__name__ = name

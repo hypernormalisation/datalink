@@ -4,7 +4,6 @@ import logging
 import uuid
 import sqlalchemy
 import sqlalchemy_utils
-from pathlib import Path
 
 
 log = logging.getLogger(__name__)
