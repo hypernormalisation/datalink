@@ -40,7 +40,9 @@ class DataStore(HasTraits):
                 setattr(self, trait, ListEntry(value))
             else:
                 setattr(self, trait, GenericEntry(value))
-            getattr(self, trait).on_trait_change(self._conditional_save_state, 'val[]')
+            getattr(self, trait).on_trait_change(
+                self._conditional_save_state, 'val[]'
+            )
 
         # Flags for internal operation.
         self._save_flag = True
@@ -49,14 +51,13 @@ class DataStore(HasTraits):
         link_id = None
         if args:
             link_id = args[0]
-        # if 'dialect' in kwargs:
-        #     self._dialect = kwargs.pop('dialect')
         self.link = self._get_link(link_id)
 
         # Check for any found data and initialise it.
         if self.link.loaded_data:
             self._format_loaded_data()
-            # If the user passed args, update the entry.
+            # If already exists and the user passed
+            # args, update the entry.
             if datastore_arg_dict:
                 self.update(**datastore_arg_dict)
 

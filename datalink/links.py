@@ -4,8 +4,6 @@ import logging
 import uuid
 import sqlalchemy
 import sqlalchemy_utils
-from datalink.utils import sqlalchemy_engine_dict
-from sqlalchemy import Table, MetaData
 
 
 log = logging.getLogger(__name__)
@@ -22,6 +20,7 @@ class SQLInterface:
         self.loaded_data = None
 
         self.ensure_database()
+        self.ensure_table()
 
         try:
             self._lookup_dict = kwargs['lookup']
@@ -46,58 +45,35 @@ class SQLInterface:
                 raise
 
     def ensure_table(self):
-        meta = MetaData()
-        table =
+        with dataset.connect(self.url) as db:
+            if self.table not in db.tables:
+                t = db[self.table]
+                log.info(f'created table {self.table}')
 
     @property
     @abc.abstractmethod
     def id(self):
         pass
 
-    # Properties for SQL
     @property
     def url(self):
         return self._url
-
-    @property
-    def engine(self):
-        if not self.url in sqlalchemy_engine_dict:
-            sqlalchemy_engine_dict[self.url] = sqlalchemy.create_engine(self.url)
-        return sqlalchemy_engine_dict[self.url]
-
-    @property
-    def table_exists(self):
-        return self.engine.dialect.has_table(self.engine, self.table)
 
     @property
     def table(self):
         return self._table
 
     def load(self):
-        """
-        Method to load the data for this id from the db.
-        If found, returns a dict of columns mapped to values.
-        If not found returns None.
-        """
-        with self.engine.connect() as con:
-            if self.table_exists:
-                columns = con.execute(f"select * from {self.table}").keys()
-                query = f"SELECT * FROM mytable WHERE `id`='{self.id}'"
-                results = con.execute(query).fetchall()
-                if not results:
-                    return None
-                if len(results) > 1:
-                    log.warning(f'Ambiguous uuid in loading of data,'
-                                f' received {len(results)} results. Taking first')
-                res = {k:v for k, v in zip(columns, results[0])}
-                return res
-
-    # def load2(self):
-    #     """Method to attempt a load from the relevant table."""
-    #     with dataset.connect(self.url) as db:
-    #         t = db[self.table]
-    #         result = t.find(id=str(self.id))
-    #         return result
+        """Method to attempt a load from the relevant table."""
+        with dataset.connect(self.url) as db:
+            t = db[self.table]
+            results = list(t.find(id=str(self.id)))
+            if not results:
+                return None
+            if len(results) > 1:
+                log.warning(f'Ambiguous uuid in loading of data,'
+                            f' received {len(results)} results. Taking first')
+            return results[0]
 
     def save(self, data):
         """Method to save or update the relevant entry in the table."""
