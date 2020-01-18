@@ -18,3 +18,6 @@ class DictEntry(HasTraits):
     val = Dict()
     def __init__(self, v):
         self.val = v
+
+
+sqlalchemy_engine_dict = {}
