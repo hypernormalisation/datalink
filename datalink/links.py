@@ -4,6 +4,7 @@ import logging
 import uuid
 import sqlalchemy
 import sqlalchemy_utils
+from sqlalchemy import Table, MetaData
 
 
 log = logging.getLogger(__name__)
@@ -14,7 +15,6 @@ class SQLInterface:
 
     def __init__(self, table_name='data', url=None,
                  link_id=None, **kwargs):
-        # self._db_path = db_path
         self._table = table_name
         self._id = link_id
         self._url = url
@@ -86,11 +86,28 @@ class SQLInterface:
         return False
 
     def load(self):
-        """Method to attempt a load from the relevant table."""
-        with dataset.connect(self.url) as db:
-            t = db[self.table]
-            result = t.find(id=str(self.id))
-            return result
+        engine = self.engine
+        con = engine.connect()
+        metadata = MetaData()
+        tab = Table(self.table, metadata, autoload=True, autoload_with=engine)
+        columns = tab.columns.keys()
+        query = sqlalchemy.select([tab]).where(tab.columns.id == self.id)
+        proxy = con.execute(query)
+        values = proxy.fetchall()
+        if values:
+            values = values[0]
+            return {k: v for k, v in zip(columns, values)}
+        else:
+            log.warning(f'Ambiguous uuid in loading of data,'
+                        f' received {len(values)} results.')
+            return None
+
+    # def load2(self):
+    #     """Method to attempt a load from the relevant table."""
+    #     with dataset.connect(self.url) as db:
+    #         t = db[self.table]
+    #         result = t.find(id=str(self.id))
+    #         return result
 
     def save(self, data):
         """Method to save or update the relevant entry in the table."""

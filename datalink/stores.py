@@ -146,11 +146,7 @@ class DataStore(HasTraits):
         Take the loaded data and format it back into python objects.
         Should only be called in initialisation.
         """
-        results = list(self.link.loaded_data)
-        if len(results) != 1:
-            log.warning(f'Ambiguous uuid in loading of data,'
-                        f' received {len(results)} results.')
-        d = results[0]
+        d = self.link.loaded_data
         d.pop('id')
         self._save_flag = False
         for k, v in d.items():
