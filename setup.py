@@ -2,12 +2,12 @@ from setuptools import setup, find_packages
 from os import path
 here = path.abspath(path.dirname(__file__))
 
-with open(path.join(here, 'tutorial.md'), encoding='utf-8') as f:
+with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
     name='datalink',
-    version='0.1.0',
+    version='0.1.1',
 
     description=('Create simple interfaces to SQL that make working with data as simple'
                 ' as working with dictionaries.'),

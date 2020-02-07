@@ -25,7 +25,7 @@ pip install datalink
 
 # Tutorial
 A full tutorial is avaiable
-[here](https://github.com/hypernormalisation/datalink/doc/tutorial.md).
+[here](https://github.com/hypernormalisation/datalink/blob/master/doc/tutorial.md).
 
 ## Creating datalinks
 If you've ever used `NameTuple` from the `collections` module, you know
