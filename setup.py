@@ -27,7 +27,7 @@ setup(
         'Programming Language :: Python :: 3.8',
     ],
 
-    keywords='development database sql',
+    keywords='development database sql pandas',
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
 
     python_requires='>=3.3',
