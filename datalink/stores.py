@@ -3,6 +3,8 @@ import ast
 import collections.abc
 import datalink.links
 import logging
+import pandas as pd
+import uuid
 from datalink.utils import GenericEntry, ListEntry
 from traits.api import HasTraits
 
@@ -15,7 +17,6 @@ class DataStore(HasTraits):
     url = None
     table = None
     _fields = {}
-    _lookup = None
     _bidirectional = True
 
     def __init__(self, *args, **kwargs):
@@ -91,12 +92,11 @@ class DataStore(HasTraits):
     # the data store.
     def _get_link(self, link_id):
         """Factory method to construct the link."""
-        if self._lookup == 'uuid':  # Only uuid supported at present.
-            return datalink.links.UUIDLookup(table_name=self.table,
-                                             url=self.url,
-                                             link_id=link_id)
-        else:
-            raise ValueError(self._lookup)
+        return datalink.links.SQLInterfaceMap(
+            table_name=self.table,
+            url=self.url,
+            link_id=link_id
+        )
 
     def _force_load(self):
         self.link.loaded_data = self.link.load()
@@ -122,7 +122,7 @@ class DataStore(HasTraits):
         d = {k: v for k, v in zip(self._fields,
                                   [getattr(self, f'{attr}_trait').val
                                    for attr in self._fields])}
-        d['id'] = self.id
+        d['datalink_id'] = self.id
         return d
 
     @property
@@ -139,7 +139,7 @@ class DataStore(HasTraits):
                 except TypeError:
                     raise
         # Add the uuid
-        d['id'] = self.link.id
+        d['datalink_id'] = self.link.id
         return d
 
     def _format_loaded_data(self):
@@ -174,3 +174,87 @@ class DataStore(HasTraits):
             if i == len(kwargs) - 1:
                 self._save_flag = True
             setattr(self, k, v)
+
+
+class FrameStore:
+    """Class to contain a dataframe that is loaded from and saved to
+    an SQL database
+    """
+    url = None
+    table = None
+
+    def __init__(self, *args, df=None):
+
+        if args and not len(args) == 1:
+            raise ValueError('Only takes K0 or 1 positional arguments.')
+
+        self._df = None
+
+        # Establish link
+        link_id = None
+        if args:
+            link_id = args[0]
+        self.link = self._get_link(link_id)
+
+        if isinstance(self.link.loaded_data, pd.DataFrame):
+            self._format_loaded_data()
+
+        if df is not None:
+            self.df = df
+            self.save()
+
+    def __bool__(self):
+        """Return true if data for the id was found in the database."""
+        if self.link.loaded_data:
+            return True
+        return False
+
+    def _get_link(self, link_id):
+        """Factory method to construct the link."""
+        return datalink.links.SQLInterfaceFrame(
+            table_name=self.table,
+            url=self.url,
+            link_id=link_id
+        )
+
+    @property
+    def id(self):
+        return self.link.id
+
+    @property
+    def df(self):
+        return self._df
+
+    @df.setter
+    def df(self, data):
+
+        # Needs different logic for when we get something other than a frame.
+        df = data.copy(deep=True)
+
+        # If necessary add the datalink identifier columns
+        # if 'datalink_id' not in df.columns:
+
+        # Set (and override if necessary) the id for the link
+        df['datalink_id'] = self.id
+
+        # Always generate new individual uuids for the entry
+        if 'datalink_unique_id' not in df.columns:
+            df['datalink_unique_id'] = [str(uuid.uuid4())
+                                        for _ in range(len(df.index))]
+        self._df = df
+
+    def save(self):
+        """Method to save the frame's contents."""
+        if isinstance(self.df, pd.DataFrame) and not self.df.empty:
+            self.link.save(self.df)
+
+    def _format_loaded_data(self):
+        df = self.link.loaded_data
+        for column in df.columns:
+            try:
+                df[column] = df.apply(
+                    lambda row: ast.literal_eval(row[column]), axis=1)
+            except (NameError, SyntaxError, ValueError):
+                pass
+        df.apply(pd.to_numeric, errors='ignore')
+        self.df = df
