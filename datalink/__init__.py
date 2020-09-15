@@ -40,6 +40,10 @@ def factory(
 
     # If url not supplied, assume sqlite and use database as file path
     # to construct an sqlite URL using the default sqlalchemy driver.
+    if not url and not database:
+        raise ValueError('One of the "url" or "database" args must be'
+                         'supplied to indicate where the SQL db is.')
+
     if not url:
         url = sqlalchemy.engine.url.URL('sqlite', database=database)
 

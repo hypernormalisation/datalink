@@ -50,10 +50,16 @@ class SQLInterface:
                 t = db[self.table]
                 log.info(f'created table {self.table}')
 
+    # @property
+    # @abc.abstractmethod
+    # def id(self):
+    #     pass
+
     @property
-    @abc.abstractmethod
     def id(self):
-        pass
+        if not self._id:
+            self._id = uuid.uuid4()
+        return str(self._id)
 
     @property
     def url(self):
