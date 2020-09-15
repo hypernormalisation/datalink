@@ -237,7 +237,7 @@ class FrameStore:
         # Set (and override if necessary) the id for the link
         df['datalink_id'] = self.id
 
-        # Always generate new individual uuids for the entry
+        # Only generate new entry uuids if necessary.
         if 'datalink_unique_id' not in df.columns:
             df['datalink_unique_id'] = [str(uuid.uuid4())
                                         for _ in range(len(df.index))]

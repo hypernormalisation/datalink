@@ -126,16 +126,22 @@ class SQLInterfaceFrame(SQLInterfaceBase):
     @property
     def is_id_saved(self):
         """Method to check if the group_uuid4 is already saved to prevent double saving."""
-        # if self.does_table_exist:
-        if True:
-            try:
-                df = pd.read_sql(self.sql_query, self.engine)
-                print(df, df.empty)
-                if not df.empty:
-                    return True
-            except Exception:
-                pass
-        return False
+        with dataset.connect(self.url) as db:
+            t = db[self.table]
+            results = list(t.find(datalink_id=str(self.id)))
+            if results:
+                return True
+            return False
+        #
+        # if True:
+        #     try:
+        #         df = pd.read_sql(self.sql_query, self.engine)
+        #         print(df, df.empty)
+        #         if not df.empty:
+        #             return True
+        #     except Exception:
+        #         pass
+        # return False
 
     def delete_group(self):
         """
@@ -151,6 +157,8 @@ class SQLInterfaceFrame(SQLInterfaceBase):
         old instances before a save operation"""
         if self.is_id_saved:
             self.delete_group()
+            return True
+        return False
 
     def ensure_table(self):
         """Does nothing with pandas, override to skip."""
@@ -170,5 +178,9 @@ class SQLInterfaceFrame(SQLInterfaceBase):
             raise
 
     def save(self, df):
-        self.ensure_unique()
+        r = self.ensure_unique()
         df.to_sql(self.table, self.engine, if_exists="append", index=False)
+        if r:
+            log.debug(f'Updating existing database entries for id {self.id}.')
+        else:
+            log.debug(f'Creating new database entries with id {self.id}.')
