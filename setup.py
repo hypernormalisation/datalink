@@ -7,7 +7,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='datalink',
-    version='0.1.1',
+    version='0.1.2',
 
     description=('Create simple interfaces to SQL that make working with data as simple'
                 ' as working with dictionaries.'),
