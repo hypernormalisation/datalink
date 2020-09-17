@@ -35,7 +35,7 @@ setup(
                       'dataset',
                       'sqlalchemy',
                       'sqlalchemy_utils',
-                      'traits',
+                      'traits==5.2.0',
                       'pandas'],
 
     project_urls={

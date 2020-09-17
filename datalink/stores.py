@@ -218,6 +218,12 @@ class FrameStore:
         )
 
     @property
+    def data(self):
+        """Property for mapping compatibility."""
+        return self.df
+
+
+    @property
     def id(self):
         return self.link.id
 
