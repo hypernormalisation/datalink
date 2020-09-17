@@ -4,7 +4,6 @@ import collections.abc
 import datalink.links
 import logging
 import pandas as pd
-import uuid
 from datalink.utils import GenericEntry, ListEntry
 from traits.api import HasTraits
 
@@ -227,12 +226,27 @@ class FrameStore:
         return self._df
 
     @df.setter
-    def df(self, data):
-
-        # Needs different logic for when we get something other than a frame.
-        df = data.copy(deep=True)
-
+    def df(self, new_input):
+        if isinstance(new_input, pd.DataFrame):
+            df = new_input
+            # If a single dict, interpret this as a single row frame.
+        elif isinstance(new_input, dict):
+            df = pd.DataFrame([new_input])
+            # If it's a series, convert to a single row frame
+        elif isinstance(new_input, pd.Series):
+            df = pd.DataFrame(new_input).T
+            # Otherwise attempt to construct a frame.
+        else:
+            try:
+                df = pd.DataFrame(new_input)
+            except Exception:
+                raise
+        # Internally set the frame.
         self._df = df
+
+        # # Needs different logic for when we get something other than a frame.
+        # df = data.copy(deep=True)
+        # self._df = df
 
     def save(self):
         """Method to save the frame's contents.

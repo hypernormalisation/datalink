@@ -1,3 +1,12 @@
+"""Module containing the linker classes in datalink.
+
+Links are lower-level objects owned by the stores and not meant to be
+interacted with by users.
+
+As a rule, the link should be responsible for holding information
+on the SQL database linked to, and be capable of a basic saving and
+loading of data into the store.
+"""
 import abc
 import dataset
 import logging
@@ -5,16 +14,12 @@ import uuid
 import pandas as pd
 import sqlalchemy
 import sqlalchemy_utils
-import sqlite3
 
 log = logging.getLogger(__name__)
 
 
 class SQLInterfaceBase:
-    """Abstract base class to template interactions with SQL databases.
-
-    Each link is responsible for
-    """
+    """Abstract base class to template interactions with SQL databases."""
     id_name = 'datalink_id'  # Name of identifier
 
     def __init__(self, table_name='data', url=None,
@@ -52,6 +57,7 @@ class SQLInterfaceBase:
 
     @property
     def id(self):
+        """The id for the link. If not given, a uuid is assigned."""
         if not self._id:
             self._id = uuid.uuid4()
         return str(self._id)
