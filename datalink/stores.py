@@ -139,7 +139,7 @@ class DataStore(HasTraits):
                 except TypeError:
                     raise
         # Add the uuid
-        d['datalink_id'] = self.link.id
+        d[self.link.id_name] = self.link.id
         return d
 
     def _format_loaded_data(self):
@@ -182,6 +182,7 @@ class FrameStore:
     """
     url = None
     table = None
+    conversion = False
 
     def __init__(self, *args, df=None):
 
@@ -205,7 +206,7 @@ class FrameStore:
 
     def __bool__(self):
         """Return true if data for the id was found in the database."""
-        if self.link.loaded_data:
+        if self.link.loaded_data is not False:
             return True
         return False
 
@@ -231,22 +232,21 @@ class FrameStore:
         # Needs different logic for when we get something other than a frame.
         df = data.copy(deep=True)
 
-        # If necessary add the datalink identifier columns
-        # if 'datalink_id' not in df.columns:
-
-        # Set (and override if necessary) the id for the link
-        df['datalink_id'] = self.id
-
-        # Only generate new entry uuids if necessary.
-        if 'datalink_unique_id' not in df.columns:
-            df['datalink_unique_id'] = [str(uuid.uuid4())
-                                        for _ in range(len(df.index))]
         self._df = df
 
     def save(self):
-        """Method to save the frame's contents."""
+        """Method to save the frame's contents.
+
+        If the conversion class attribute is set, all contents of the frame
+        will be saved as strings. This can be useful if you have lists or
+        other types in the dataframe's cells that sqlite cannot handle.
+        """
         if isinstance(self.df, pd.DataFrame) and not self.df.empty:
-            self.link.save(self.df)
+            if self.conversion:
+                df_as_str = self.df.copy().astype(str)
+                self.link.save(df_as_str)
+            else:
+                self.link.save(self.df)
 
     def _format_loaded_data(self):
         df = self.link.loaded_data

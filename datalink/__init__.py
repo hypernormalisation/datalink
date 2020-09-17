@@ -59,7 +59,7 @@ def factory(
     return new_class
 
 
-def frame_factory(name, table, url=None, database=None):
+def frame_factory(name, table, url=None, database=None, conversion=False):
 
     # Check args and kwargs
     for arg in [name, table]:
@@ -80,4 +80,5 @@ def frame_factory(name, table, url=None, database=None):
 
     new_class.url = str(url)
     new_class.table = table
+    new_class.conversion = conversion
     return new_class

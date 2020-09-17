@@ -5,27 +5,39 @@ import uuid
 import pandas as pd
 import sqlalchemy
 import sqlalchemy_utils
-
+import sqlite3
 
 log = logging.getLogger(__name__)
 
 
 class SQLInterfaceBase:
-    """Abstract base class to template interactions with SQL databases."""
+    """Abstract base class to template interactions with SQL databases.
+
+    Each link is responsible for
+    """
+    id_name = 'datalink_id'  # Name of identifier
 
     def __init__(self, table_name='data', url=None,
                  link_id=None, **kwargs):
         self._table = table_name
         self._id = link_id
         self._url = url
-        self.loaded_data = None
+        self.loaded_data = False
 
         self.ensure_database()
-        self.ensure_table()
 
         # Try to load.
         if link_id:
             self.loaded_data = self.load()
+
+    @property
+    def engine(self):
+        return sqlalchemy.create_engine(self.url)
+
+    @property
+    def sql_query(self):
+        """The SQL query to match the data."""
+        return f'SELECT * FROM {self.table} WHERE {self.id_name}=\'{self.id}\''
 
     def ensure_database(self):
         """Ensure the database for the type of data exists."""
@@ -37,12 +49,6 @@ class SQLInterfaceBase:
                 log.error(f'failed to create db at: {self.url}')
                 log.error(e)
                 raise
-
-    def ensure_table(self):
-        with dataset.connect(self.url) as db:
-            if self.table not in db.tables:
-                t = db[self.table]
-                log.info(f'created table {self.table}')
 
     @property
     def id(self):
@@ -59,7 +65,7 @@ class SQLInterfaceBase:
         return self._table
 
     # Save and load are abstract methods that are implemented in
-    # subclasses depending on the type of data required.
+    # subclasses depending on how the data is stored in the application.
     @abc.abstractmethod
     def load(self):
         pass
@@ -70,6 +76,8 @@ class SQLInterfaceBase:
 
 
 class SQLInterfaceMap(SQLInterfaceBase):
+    """Class for handling links to SQL data that will become
+    simple mappings in the application."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -80,7 +88,8 @@ class SQLInterfaceMap(SQLInterfaceBase):
         """Method to attempt a load from the relevant table."""
         with dataset.connect(self.url) as db:
             t = db[self.table]
-            results = list(t.find(datalink_id=str(self.id)))
+            find_args = {self.id_name: str(self.id)}
+            results = list(t.find(**find_args))
             if not results:
                 return None
             if len(results) > 1:
@@ -96,91 +105,93 @@ class SQLInterfaceMap(SQLInterfaceBase):
                 if self.table in db.tables:
                     t = db[self.table]
                 else:
+                    log.info(f'created table {self.table}')
                     t = db.create_table(self.table, primary_id=False)
                 t.insert(data)
         else:
             with dataset.connect(self.url) as db:
                 log.debug(f'Updating existing database entry for id {self.id}.')
                 t = db[self.table]
-                t.update(data, ['datalink_id'])
+                t.update(data, [self.id_name])
 
 
 class SQLInterfaceFrame(SQLInterfaceBase):
+    """Class for handling links to SQL data that will become
+       pandas.Dataframe objects in the application."""
+    id_name = 'datalink_frame_id'  # denotes the frame as a whole
+    row_name = 'datalink_row_id'  # denotes individual rows, for internal use
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if isinstance(self.loaded_data, pd.DataFrame) and \
-                not self.loaded_data.empty:
+        # if isinstance(self.loaded_data, pd.DataFrame) and \
+        #         not self.loaded_data.empty:
+        if self.loaded_data is not False:
             log.debug(f'Loaded data corresponding to ID: {self.id}')
 
-    @property
-    def engine(self):
-        return sqlalchemy.create_engine(self.url)
+    def find_extant_row_ids(self):
+        """Function to return a list of the row ids for any data
+        already in the database matching the frame ids.
 
-    @property
-    def sql_query(self):
-        """Abstract property for sql query to be used in loading."""
-        return f'SELECT * FROM {self.table} WHERE datalink_id=\'{self.id}\''
-
-    @property
-    def is_id_saved(self):
-        """Method to check if the group_uuid4 is already saved to prevent double saving."""
+        Used to delete older data once new data has been written.
+        """
+        row_ids = []
         with dataset.connect(self.url) as db:
             t = db[self.table]
-            results = list(t.find(datalink_id=str(self.id)))
-            if results:
-                return True
-            return False
-        #
-        # if True:
-        #     try:
-        #         df = pd.read_sql(self.sql_query, self.engine)
-        #         print(df, df.empty)
-        #         if not df.empty:
-        #             return True
-        #     except Exception:
-        #         pass
-        # return False
+            find_args = {self.id_name: self.id}
+            results = list(t.find(**find_args))
+            if not results:
+                return []
+            for d in results:
+                row_ids.append(d[self.row_name])
+        return row_ids
 
-    def delete_group(self):
-        """
-        Method to delete all entries in the table matching the id of the data.
-        Should be used when overwriting
-        """
+    def delete_row_ids(self, row_ids):
+        """Delete the rows corresponding to the given row ids."""
         with dataset.connect(self.url) as db:
             t = db[self.table]
-            t.delete(datalink_id=str(self.id))
-
-    def ensure_unique(self):
-        """Method to ensure that this frame's data is unique by deleting
-        old instances before a save operation"""
-        if self.is_id_saved:
-            self.delete_group()
-            return True
-        return False
-
-    def ensure_table(self):
-        """Does nothing with pandas, override to skip."""
-        pass
+            for row_id in row_ids:
+                delete_args = {self.row_name: row_id}
+                t.delete(**delete_args)
 
     def load(self):
-        # Odd behaviour with dataset table creation, workaround.
-        with dataset.connect(self.url) as db:
-            if self.table not in db.tables:
-                return False
+        """Load the frame. If no data matches return False.
 
-        # If table exists, load.
+        If no data matches the id pandas.read_sql
+        will return an empty frame. In such cases return False
+        """
         try:
             df = pd.read_sql(self.sql_query, self.engine)
+            if df.empty:
+                return False
             return df
+        # If table does not exist raises a sqlite3.OperationalError but
+        # I'm unsure how to properly except it, hence the bare exception.
         except Exception:
-            raise
+            return False
 
     def save(self, df):
-        r = self.ensure_unique()
+        """Called by the parent FrameStore in save calls."""
+
+        # If this is the first call for the class we make the table here
+        # so alert the user.
+        with dataset.connect(self.url) as db:
+            if self.table not in db.tables:
+                log.info(f'created table {self.table}')
+
+        # Assign the frame and row identifiers.
+        df[self.id_name] = self.id
+        df[self.row_name] = [str(uuid.uuid4())
+                             for _ in range(len(df.index))]
+
+        # Check for the presence of older data matching the frame id.
+        # If found, note the row ids for this data before saving, so we
+        # can delete the older data once the new data has been safely stored.
+        row_ids = self.find_extant_row_ids()
+
         df.to_sql(self.table, self.engine, if_exists="append", index=False)
-        if r:
+        if row_ids:
             log.debug(f'Updating existing database entries for id {self.id}.')
+            self.delete_row_ids(row_ids)
         else:
             log.debug(f'Creating new database entries with id {self.id}.')
