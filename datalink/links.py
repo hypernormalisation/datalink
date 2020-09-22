@@ -70,6 +70,10 @@ class SQLInterfaceBase:
     def table(self):
         return self._table
 
+    @property
+    def adjunct_table(self):
+        return f'{self.table}_adjunct'
+
     # Save and load are abstract methods that are implemented in
     # subclasses depending on how the data is stored in the application.
     @abc.abstractmethod
@@ -201,3 +205,30 @@ class SQLInterfaceFrame(SQLInterfaceBase):
             self.delete_row_ids(row_ids)
         else:
             log.debug(f'Creating new database entries with id {self.id}.')
+
+        # Drop the columns we just added in place.
+        df.drop(columns=['datalink_frame_id', 'datalink_row_id'], inplace=True)
+
+
+    def return_datetime_list(self):
+        """Function to interrogate the adjunct table and find the most
+        recent timestamp, if any exist. Only used in TemporalFrameStores."""
+        with dataset.connect(self.url) as db:
+            if self.adjunct_table not in db.tables:
+                return []
+            t = db[self.adjunct_table]
+
+            dt_list = []
+            for entry in t:
+                dt_list.append(entry['datetime'])
+            return dt_list
+
+    def create_adjunct_entry(self):
+        """Function to put an entry into the adjunct table. Only used in
+        TemporalFrameStore derivatives, and holds only the datetime of the
+        entry for faster queries."""
+        with dataset.connect(self.url) as db:
+            t = db[self.adjunct_table]
+            t.insert(
+                {'datetime': self.id}
+            )

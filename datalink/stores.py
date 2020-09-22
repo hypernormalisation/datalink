@@ -1,6 +1,7 @@
 import copy
 import ast
 import collections.abc
+import datetime
 import datalink.links
 import logging
 import pandas as pd
@@ -182,6 +183,7 @@ class FrameStore:
     url = None
     table = None
     conversion = False
+    on_fail = None
 
     def __init__(self, *args, df=None):
 
@@ -216,12 +218,6 @@ class FrameStore:
             url=self.url,
             link_id=link_id
         )
-
-    @property
-    def data(self):
-        """Property for mapping compatibility."""
-        return self.df
-
 
     @property
     def id(self):
@@ -277,4 +273,110 @@ class FrameStore:
             except (NameError, SyntaxError, ValueError):
                 pass
         df.apply(pd.to_numeric, errors='ignore')
+
+        # drop the datalink-specific columns
+        df.drop(columns=['datalink_frame_id', 'datalink_row_id'], inplace=True)
         self.df = df
+
+
+class TemporalFrameStore(FrameStore):
+    """A type of store that automatically assigns id based on epochs
+    and a maximum age.
+    """
+    max_age_seconds = None
+
+    def __init__(self):
+
+        self._df = None
+
+        # A flag to only save to the adjunct table
+        # on the very first pass.
+        self._adjunct_save = True
+
+        # Make a datetime at UTC time now.
+        now = datetime.datetime.utcnow()
+
+        # Check the validity of this time.
+        most_recent_datetime = self.return_most_recent_datetime(now)
+
+        # If there are no previous entries, use the on_fail if given
+        # then return.
+        if most_recent_datetime is None:
+            if self.on_fail:
+                log.info('No previous info found and an on_fail is configured.'
+                         ' Creating and saving new frame.')
+                self.df = self.on_fail.__func__()
+                self.save()
+            return
+
+        # If it's good, make a link with the appropriate id as the iso format
+        # time as a string and load the data.
+        if self.is_datetime_good(now, most_recent_datetime):
+
+            # Forbid saving to the adjunct table if it's not new data.
+            self._adjunct_save = False
+
+            data_id = str(most_recent_datetime)
+            self.link = self._get_link(data_id)
+
+            if isinstance(self.link.loaded_data, pd.DataFrame):
+                self._format_loaded_data()
+        else:
+            log.info('Previous info found but too old, and an on_fail '
+                     'is configured. Creating and saving new frame.')
+            if self.on_fail:
+                self.df = self.on_fail.__func__()
+                self.save()
+
+    def return_most_recent_datetime(self, now):
+        """Returns False if no recent entries or the most recent is too old.
+        Returns True if it's acceptable.
+        """
+        link_id = str(now)
+        link = self._get_link(link_id)
+        self.link = link
+
+        # Get a list of dt_lists and find the most recent
+        dt_list_raw = link.return_datetime_list()
+        if not dt_list_raw:
+            log.debug('No entries found in adjunct table.')
+            return None
+        dt_list = []
+        for dt_raw in dt_list_raw:
+            try:
+                dt = datetime.datetime.fromisoformat(dt_raw)
+                dt_list.append(dt)
+            except ValueError:
+                pass
+
+        if not dt_list:
+            return None
+
+        # If we have any datetimes, find the most recent
+        most_recent_dt = None
+        if dt_list:
+            most_recent_dt = min(dt_list, key=lambda d: abs(d - now))
+        return most_recent_dt
+
+    def is_datetime_good(self, now, dt):
+        """Evaluates the given datetime dt against now.
+
+        If it's within the acceptable age return True, else False.
+        """
+        age_most_recent_seconds = (now - dt).seconds
+        # print(age_most_recent_seconds, self.max_age_seconds)
+        if age_most_recent_seconds > self.max_age_seconds:
+            # log.info(f'Found data in {self.link.table}'
+            #          ' but it\'s too old.')
+            return False
+        else:
+            return True
+
+    def save(self):
+        """Save as for FrameStore but if necessary save the datetime
+        to the adjunct table.
+        """
+        super().save()
+        if self._adjunct_save:
+            self.link.create_adjunct_entry()
+        self._adjunct_save = False

@@ -59,7 +59,11 @@ def factory(
     return new_class
 
 
-def frame_factory(name, table, url=None, database=None, conversion=False):
+def frame_factory(
+        name, table,
+        url=None, database=None, conversion=False,
+        on_fail=None
+):
 
     # Check args and kwargs
     for arg in [name, table]:
@@ -81,4 +85,36 @@ def frame_factory(name, table, url=None, database=None, conversion=False):
     new_class.url = str(url)
     new_class.table = table
     new_class.conversion = conversion
+    new_class.on_fail = on_fail
+    return new_class
+
+def temporal_frame_factory(
+        name, table,
+        url=None, database=None, conversion=False,
+        max_age_seconds=3600,
+        on_fail=None
+    ):
+
+    # Check args and kwargs
+    for arg in [name, table]:
+        if not arg:
+            raise ValueError(f'{arg} is a required positional field.')
+
+    # If url not supplied, assume sqlite and use database as file path
+    # to construct an sqlite URL using the default sqlalchemy driver.
+    if not (url or database):
+        raise ValueError('One of the "url" or "database" args must be'
+                         'supplied to indicate where the SQL db is.')
+
+    if not url:
+        url = sqlalchemy.engine.url.URL('sqlite', database=database)
+
+    new_class = types.new_class(name, bases=(dlstores.TemporalFrameStore, ))
+    new_class.__name__ = name
+
+    new_class.url = str(url)
+    new_class.table = table
+    new_class.conversion = conversion
+    new_class.max_age_seconds = max_age_seconds
+    new_class.on_fail = on_fail
     return new_class
