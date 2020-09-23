@@ -7,10 +7,10 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='datalink',
-    version='0.1.2',
+    version='0.1.3',
 
-    description=('Create simple interfaces to SQL that make working with data as simple'
-                ' as working with dictionaries.'),
+    description=('Create simple interfaces to SQL that make working with '
+                 'data as simple as working with dictionaries.'),
 
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -30,7 +30,7 @@ setup(
     keywords='development database sql pandas',
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
 
-    python_requires='>=3.3',
+    python_requires='>=3.6',
     install_requires=['sqlalchemy',
                       'dataset',
                       'sqlalchemy',

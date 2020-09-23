@@ -246,10 +246,6 @@ class FrameStore:
         # Internally set the frame.
         self._df = df
 
-        # # Needs different logic for when we get something other than a frame.
-        # df = data.copy(deep=True)
-        # self._df = df
-
     def save(self):
         """Method to save the frame's contents.
 
@@ -364,10 +360,7 @@ class TemporalFrameStore(FrameStore):
         If it's within the acceptable age return True, else False.
         """
         age_most_recent_seconds = (now - dt).seconds
-        # print(age_most_recent_seconds, self.max_age_seconds)
         if age_most_recent_seconds > self.max_age_seconds:
-            # log.info(f'Found data in {self.link.table}'
-            #          ' but it\'s too old.')
             return False
         else:
             return True

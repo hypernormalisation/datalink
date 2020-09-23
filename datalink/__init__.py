@@ -3,7 +3,7 @@
 __author__ = 'Stephen Ogilvy'
 __copyright__ = 'Stephen Ogilvy'
 __licence__ = 'GPLv3'
-__version__ = '0.0.1'
+__version__ = '0.1.3'
 __email__ = 'sogilvy@protonmail.com'
 
 import logging
@@ -87,6 +87,7 @@ def frame_factory(
     new_class.conversion = conversion
     new_class.on_fail = on_fail
     return new_class
+
 
 def temporal_frame_factory(
         name, table,

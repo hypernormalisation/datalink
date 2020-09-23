@@ -209,7 +209,6 @@ class SQLInterfaceFrame(SQLInterfaceBase):
         # Drop the columns we just added in place.
         df.drop(columns=['datalink_frame_id', 'datalink_row_id'], inplace=True)
 
-
     def return_datetime_list(self):
         """Function to interrogate the adjunct table and find the most
         recent timestamp, if any exist. Only used in TemporalFrameStores."""
@@ -217,7 +216,6 @@ class SQLInterfaceFrame(SQLInterfaceBase):
             if self.adjunct_table not in db.tables:
                 return []
             t = db[self.adjunct_table]
-
             dt_list = []
             for entry in t:
                 dt_list.append(entry['datetime'])
